@@ -13,6 +13,9 @@ import {
   ArcElement,
 } from 'chart.js';
 import { Line, Doughnut } from 'react-chartjs-2';
+import { User } from '@prisma/client';
+
+type SafeUser = Omit<User, 'passwordHash'>;
 
 ChartJS.register(
   CategoryScale,
@@ -59,7 +62,11 @@ const mockKPIs: KPI[] = [
   },
 ];
 
-export default function Dashboard() {
+interface DashboardProps {
+  currentUser: SafeUser;
+}
+
+export default function Dashboard({ currentUser }: DashboardProps) {
   const [timeRange, setTimeRange] = useState('today');
 
   const callVolumeData = {

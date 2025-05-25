@@ -3,18 +3,21 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { PlayIcon, PauseIcon } from '@heroicons/react/24/outline';
-import type { Call, Recording, CallType } from '@prisma/client';
+import type { Call, Recording, CallType, User } from '@prisma/client';
+
+type SafeUser = Omit<User, 'passwordHash'>;
 
 interface CallWithRecording extends Call {
   recording?: Recording | null;
 }
 
 interface CallLogsProps {
-  calls: CallWithRecording[];
+  calls?: CallWithRecording[];
+  currentUser: SafeUser;
   onPlayRecording?: (recordingUrl: string) => void;
 }
 
-export default function CallLogs({ calls, onPlayRecording }: CallLogsProps) {
+export default function CallLogs({ calls = [], currentUser, onPlayRecording }: CallLogsProps) {
   const [selectedCall, setSelectedCall] = useState<CallWithRecording | null>(null);
 
   const formatDuration = (seconds: number) => {

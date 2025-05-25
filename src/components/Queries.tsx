@@ -9,20 +9,22 @@ import {
 } from '@heroicons/react/24/outline';
 import type { Query, User } from '@prisma/client';
 
+type SafeUser = Omit<User, 'passwordHash'>;
+
 interface QueryWithAssignee extends Query {
-  assignee: User;
+  assignee: SafeUser;
 }
 
 interface QueriesProps {
-  queries: QueryWithAssignee[];
+  queries?: QueryWithAssignee[];
   onStatusChange?: (queryId: number, newStatus: string) => void;
   onAssign?: (queryId: number, assigneeId: number) => void;
-  currentUser: User;
-  availableAssignees?: User[];
+  currentUser: SafeUser;
+  availableAssignees?: SafeUser[];
 }
 
 export default function Queries({ 
-  queries, 
+  queries = [], 
   onStatusChange, 
   onAssign, 
   currentUser,

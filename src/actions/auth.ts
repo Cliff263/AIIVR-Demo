@@ -2,12 +2,12 @@
 import  prisma from "@/lib/prisma";
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from "@oslojs/encoding";
 import { sha256 } from "@oslojs/crypto/sha2";
-import type { Session, User, UserRole } from "@prisma/client";
+import type { User, Session, UserRole } from "@prisma/client";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
 export async function generateSessionToken(): Promise<string> {
-	const bytes = new Uint8Array(20); 
+	const bytes = new Uint8Array(20);
 	crypto.getRandomValues(bytes);
 	const token = encodeBase32LowerCaseNoPadding(bytes);
 	return token;
@@ -125,42 +125,58 @@ export const registerUser = async (email: string, password: string, name: string
             }
         });
         const safeUser = { ...user, passwordHash: undefined };
-        return {user: safeUser, error: null};
-	} catch {
+        return { user: safeUser, error: null };
+    } catch (error) {
+        console.error('Registration error:', error);
         return {
             user: null,
             error: "Failed to create user"
-        }
+        };
     }
 };
 
 export const signIn = async (email: string, password: string) => {
-    const user = await prisma.user.findUnique({
-        where: {
-            email: email
+    try {
+        const user = await prisma.user.findUnique({
+            where: {
+                email: email
+            }
+        });
+        
+        if (!user) {
+            return {
+                user: null,
+                error: "No user found"
+            };
         }
-    });
-    if(!user){
+
+        const isPasswordValid = await verifyPassword(password, user.passwordHash);
+        if (!isPasswordValid) {
+            return {
+                user: null,
+                error: "Invalid password"
+            };
+        }
+
+        const token = await generateSessionToken();
+        const session = await createSession(token, user.id);
+        await setSessionTokenCookie(token, session.expiresAt);
+        
+        const safeUser = { 
+            ...user, 
+            passwordHash: undefined 
+        };
+        
+        return {
+            user: safeUser,
+            error: null
+        };
+    } catch (error) {
+        console.error('Sign in error:', error);
         return {
             user: null,
-            error: "No user found"
-        }
-    }
-    const isPasswordValid = await verifyPassword(password, user.passwordHash);
-    if(!isPasswordValid){
-        return {
-            user: null,
-            error: "Invalid password"
-        }
-    }
-    const token = await generateSessionToken();
-    const session = await createSession(token, user.id);
-    await setSessionTokenCookie(token, session.expiresAt); 
-    const safeUser = { 
-        ...user, passwordHash: undefined 
-    };
-    return {
-        user: safeUser, error: null
+            error: "An error occurred during sign in"
+        };
     }
 };
 

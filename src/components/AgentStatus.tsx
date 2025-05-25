@@ -2,17 +2,33 @@
 
 import { useState } from 'react';
 import { UserCircleIcon, PhoneIcon, ClockIcon } from '@heroicons/react/24/outline';
-import { AgentStatusInfo, AgentStatus as AgentStatusType, PauseReason, User } from '@prisma/client';
+import { AgentStatusInfo, AgentStatus as AgentStatusType, PauseReason, User, UserRole } from '@prisma/client';
+
+type SafeUser = Omit<User, 'passwordHash'>;
 
 interface AgentStatusProps {
-  agent: User & {
+  agent?: SafeUser & {
     status?: AgentStatusInfo | null;
   };
   onStatusChange?: (status: AgentStatusType, pauseReason?: PauseReason | null) => void;
   isSupervisor?: boolean;
+  currentUser: SafeUser;
 }
 
-export default function AgentStatus({ agent, onStatusChange, isSupervisor = false }: AgentStatusProps) {
+export default function AgentStatus({ 
+  agent = { 
+    id: 0, 
+    email: '', 
+    name: '', 
+    role: 'AGENT' as UserRole, 
+    createdAt: new Date(), 
+    updatedAt: new Date(),
+    supervisorId: null
+  }, 
+  onStatusChange, 
+  isSupervisor = false,
+  currentUser
+}: AgentStatusProps) {
   const [isPaused, setIsPaused] = useState(agent.status?.status === 'PAUSED');
   const [selectedReason, setSelectedReason] = useState<PauseReason | null | undefined>(agent.status?.pauseReason);
 
