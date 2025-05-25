@@ -13,7 +13,16 @@ interface AgentStatusProps {
   onStatusChange?: (status: AgentStatusType, pauseReason?: PauseReason | null) => void;
   isSupervisor?: boolean;
   currentUser: SafeUser;
+  onResumeAgent?: (agentId: number) => void;
 }
+
+const PAUSE_REASONS: PauseReason[] = [
+  'LUNCH',
+  'BATHROOM',
+  'SMOKE',
+  'ON_LEAVE',
+  'CASE_WORK'
+];
 
 export default function AgentStatus({ 
   agent = { 
@@ -27,21 +36,35 @@ export default function AgentStatus({
   }, 
   onStatusChange, 
   isSupervisor = false,
-  currentUser
+  currentUser,
+  onResumeAgent
 }: AgentStatusProps) {
   const [isPaused, setIsPaused] = useState(agent.status?.status === 'PAUSED');
   const [selectedReason, setSelectedReason] = useState<PauseReason | null | undefined>(agent.status?.pauseReason);
+  const [showPauseMenu, setShowPauseMenu] = useState(false);
 
   const handleStatusToggle = () => {
-    const newStatus = isPaused ? 'ONLINE' : 'PAUSED';
-    setIsPaused(!isPaused);
-    onStatusChange?.(newStatus, selectedReason);
+    if (isPaused) {
+      setIsPaused(false);
+      setSelectedReason(null);
+      onStatusChange?.('ONLINE', null);
+    } else {
+      setShowPauseMenu(true);
+    }
   };
 
-  const handleReasonChange = (reason: PauseReason) => {
+  const handlePause = (reason: PauseReason) => {
+    setIsPaused(true);
     setSelectedReason(reason);
-    if (isPaused) {
-      onStatusChange?.('PAUSED', reason);
+    setShowPauseMenu(false);
+    onStatusChange?.('PAUSED', reason);
+  };
+
+  const handleResume = () => {
+    if (isSupervisor && onResumeAgent) {
+      onResumeAgent(agent.id);
+    } else {
+      handleStatusToggle();
     }
   };
 
@@ -56,6 +79,10 @@ export default function AgentStatus({
       default:
         return 'bg-gray-500';
     }
+  };
+
+  const formatPauseReason = (reason: PauseReason) => {
+    return reason.toLowerCase().replace('_', ' ');
   };
 
   return (
@@ -73,42 +100,50 @@ export default function AgentStatus({
             <span className={`h-3 w-3 rounded-full ${getStatusColor(agent.status?.status || 'OFFLINE')} mr-2`} />
             <span className="text-sm text-gray-500">
               {agent.status?.status || 'OFFLINE'}
+              {agent.status?.pauseReason && ` (${formatPauseReason(agent.status.pauseReason)})`}
             </span>
           </div>
           {!isSupervisor && (
+            <div className="relative">
+              <button
+                onClick={handleStatusToggle}
+                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  isPaused
+                    ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                    : 'bg-green-100 text-green-800 hover:bg-green-200'
+                }`}
+              >
+                {isPaused ? 'Resume' : 'Pause'}
+              </button>
+              
+              {showPauseMenu && (
+                <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                  <div className="py-1" role="menu">
+                    {PAUSE_REASONS.map((reason) => (
+                      <button
+                        key={reason}
+                        onClick={() => handlePause(reason)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        role="menuitem"
+                      >
+                        {formatPauseReason(reason)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {isSupervisor && isPaused && (
             <button
-              onClick={handleStatusToggle}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                isPaused
-                  ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                  : 'bg-green-100 text-green-800 hover:bg-green-200'
-              }`}
+              onClick={handleResume}
+              className="px-4 py-2 rounded-md text-sm font-medium bg-green-100 text-green-800 hover:bg-green-200"
             >
-              {isPaused ? 'Resume' : 'Pause'}
+              Resume Agent
             </button>
           )}
         </div>
       </div>
-
-      {isPaused && (
-        <div className="mt-4">
-          <label htmlFor="pause-reason" className="block text-sm font-medium text-gray-700">Pause Reason</label>
-          <select
-            id="pause-reason"
-            value={selectedReason || ''}
-            onChange={(e) => handleReasonChange(e.target.value as PauseReason)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-            aria-label="Select pause reason"
-          >
-            <option value="">Select a reason</option>
-            {Object.values(PauseReason).map((reason) => (
-              <option key={reason} value={reason}>
-                {reason.replace('_', ' ')}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {agent.status?.lastActive && (
         <div className="mt-4 flex items-center text-sm text-gray-500">

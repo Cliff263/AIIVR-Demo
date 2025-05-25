@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { PlayIcon, PauseIcon } from '@heroicons/react/24/outline';
+import { PlayIcon } from '@heroicons/react/24/outline';
 import type { Call, Recording, CallType, User } from '@prisma/client';
 
 type SafeUser = Omit<User, 'passwordHash'>;
@@ -66,7 +66,9 @@ export default function CallLogs({ calls = [], currentUser, onPlayRecording }: C
                   {formatDuration(call.duration)}
                 </span>
                 {call.recording && (
-                  <button type='button' title='Play Recording'
+                  <button
+                    type='button'
+                    title='Play Recording'
                     onClick={(e) => {
                       e.stopPropagation();
                       onPlayRecording?.(call.recording!.url);

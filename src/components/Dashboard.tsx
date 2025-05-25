@@ -13,7 +13,8 @@ import {
   ArcElement,
 } from 'chart.js';
 import { Line, Doughnut } from 'react-chartjs-2';
-import { User } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
+import { PhoneIcon, UserGroupIcon, ClockIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 
 type SafeUser = Omit<User, 'passwordHash'>;
 
@@ -33,6 +34,20 @@ interface KPI {
   value: number;
   change: number;
   trend: 'up' | 'down' | 'neutral';
+  icon: React.ElementType;
+}
+
+interface AgentStatus {
+  id: number;
+  name: string;
+  status: 'online' | 'offline' | 'paused';
+  pauseReason?: string;
+  lastActive: Date;
+  currentCall?: {
+    type: 'inbound' | 'outbound';
+    duration: number;
+    contact: string;
+  };
 }
 
 const mockKPIs: KPI[] = [
@@ -41,24 +56,28 @@ const mockKPIs: KPI[] = [
     value: 156,
     change: 12,
     trend: 'up',
+    icon: PhoneIcon,
   },
   {
     label: 'Average Handle Time',
     value: 245,
     change: -8,
     trend: 'down',
+    icon: ClockIcon,
   },
   {
     label: 'First Call Resolution',
     value: 78,
     change: 5,
     trend: 'up',
+    icon: ChartBarIcon,
   },
   {
-    label: 'Customer Satisfaction',
-    value: 92,
-    change: 3,
+    label: 'Active Agents',
+    value: 12,
+    change: 2,
     trend: 'up',
+    icon: UserGroupIcon,
   },
 ];
 
@@ -68,6 +87,33 @@ interface DashboardProps {
 
 export default function Dashboard({ currentUser }: DashboardProps) {
   const [timeRange, setTimeRange] = useState('today');
+  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
+  const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
+
+  // Mock data for agent statuses
+  useEffect(() => {
+    // This would be replaced with actual API call
+    setAgentStatuses([
+      {
+        id: 1,
+        name: 'John Doe',
+        status: 'online',
+        lastActive: new Date(),
+        currentCall: {
+          type: 'inbound',
+          duration: 245,
+          contact: '+1234567890',
+        },
+      },
+      {
+        id: 2,
+        name: 'Jane Smith',
+        status: 'paused',
+        pauseReason: 'Lunch',
+        lastActive: new Date(),
+      },
+    ]);
+  }, []);
 
   const callVolumeData = {
     labels: ['9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
@@ -97,16 +143,26 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     ],
   };
 
+  const isSupervisor = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN';
+
   return (
     <div className="space-y-6">
+      {/* Header with Time Range Selector */}
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Dashboard</h2>
+        <div>
+          <h2 className="text-xl font-semibold">Dashboard</h2>
+          {isSupervisor && (
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedAgent ? 'Viewing Agent Details' : 'Overview'}
+            </p>
+          )}
+        </div>
         <div className="flex space-x-2">
           <button
             onClick={() => setTimeRange('today')}
             className={`px-3 py-1 text-sm rounded-md ${
               timeRange === 'today'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 hover:bg-gray-200'
             }`}
           >
@@ -116,7 +172,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             onClick={() => setTimeRange('week')}
             className={`px-3 py-1 text-sm rounded-md ${
               timeRange === 'week'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 hover:bg-gray-200'
             }`}
           >
@@ -126,7 +182,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             onClick={() => setTimeRange('month')}
             className={`px-3 py-1 text-sm rounded-md ${
               timeRange === 'month'
-                ? 'bg-indigo-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 hover:bg-gray-200'
             }`}
           >
@@ -135,13 +191,58 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
       </div>
 
+      {/* Agent Status Section (Supervisor View) */}
+      {isSupervisor && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Agent Status</h3>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {agentStatuses.map((agent) => (
+              <div
+                key={agent.id}
+                className="p-4 hover:bg-gray-50 cursor-pointer"
+                onClick={() => setSelectedAgent(agent.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`h-3 w-3 rounded-full ${
+                      agent.status === 'online' ? 'bg-green-500' :
+                      agent.status === 'paused' ? 'bg-yellow-500' :
+                      'bg-gray-500'
+                    }`} />
+                    <span className="font-medium">{agent.name}</span>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {agent.status === 'paused' && agent.pauseReason && (
+                      <span className="text-yellow-600">{agent.pauseReason}</span>
+                    )}
+                    {agent.currentCall && (
+                      <span className="text-blue-600">
+                        On call: {agent.currentCall.contact}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {mockKPIs.map((kpi) => (
           <div
             key={kpi.label}
             className="bg-white rounded-lg shadow p-6"
           >
-            <h3 className="text-sm font-medium text-gray-500">{kpi.label}</h3>
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <kpi.icon className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="ml-3 text-sm font-medium text-gray-500">{kpi.label}</h3>
+            </div>
             <div className="mt-2 flex items-baseline">
               <p className="text-2xl font-semibold text-gray-900">
                 {kpi.label === 'Average Handle Time'
@@ -167,6 +268,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         ))}
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Call Volume</h3>

@@ -2,6 +2,7 @@
 import React, { useActionState } from "react";
 import Form from "next/form";
 import {Loader2} from "lucide-react";  
+import Link from "next/link";
 
 export type SignUpState = { message: string | undefined }
 type SignUpProps = {
@@ -13,73 +14,127 @@ const initialState = { message: '' }
 const SignUp = ({action}: SignUpProps) => {
     const [state, formAction, isPending] = useActionState(action, initialState)
     return (
-        <Form action={formAction} className="max-w-md mx-auto my-16 p-8 bg-white rounded-lg shadow-md">
-            <h1 className="text-2xl font-bold text-center mb-2">
-                Join the AIIVR Revolution!
-            </h1>
-            <p className="text-center text-sm text-gray-600 font-semibold mb-2">
-                SignUp now & GET STARTED!
-            </p>
-            <div className="space-y-6">
-                {/* Name */}
-                <div className="space-y-2">
-                    <label htmlFor='name' className="block text-sm font-medium text-gray-700">
-                        Full Name
-                    </label>
-                    <input type="text" id="name" name="name" autoComplete="name" required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                    placeholder="Enter your full name"/>
-                </div>
-                {/* Email */}
-                <div className="space-y-2">
-                    <label htmlFor='email' className="block text-sm font-medium text-gray-700">
-                        Email
-                    </label>
-                    <input type="email" id="email" name="email" autoComplete="email" required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                    placeholder="Enter your Email"/>
-                </div>
-                {/* Password */}
-                <div className="space-y-2">
-                    <label htmlFor='password' className="block text-sm font-medium text-gray-700">
-                        Password
-                    </label>
-                    <input type="password" id="password" name="password" autoComplete="new-password" required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                    placeholder="Create Password"/>
-                </div>
-                {/* Role */}
-                <div className="space-y-2">
-                    <label htmlFor='role' className="block text-sm font-medium text-gray-700">
-                        Role
-                    </label>
-                    <select id="role" name="role" required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-black focus:border-transparent transition-colors">
-                        <option value="AGENT">Agent</option>
-                        <option value="SUPERVISOR">Supervisor</option>
-                        <option value="ADMIN">Admin</option>
-                    </select>
-                </div>
-                {/* Submit Button */}
-                <button type="submit" disabled={isPending}
-                    className={`w-full bg-rose-600 text-white py-3 rounded-md hover:bg-rose-750 transition-colors font-medium flex items-center justify-center gap-2
-                    ${isPending ? 'cursor-not-allowed' : ''}`}
-                    >{isPending ? (
-                        <React.Fragment>
-                            <Loader2 className='h-4 w-4 animate-spin' />
-                            CREATING ACCOUNT...
-                        </React.Fragment>
-                    ) : (
-                        'CREATE ACCOUNT'
-                    )}
-                </button>
-                {state?.message && state.message.length > 0 && (
-                    <p className="text-center text-sm text-red-700">
-                        {state.message}
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-4 sm:px-6 lg:px-8">
+            <Form action={formAction} className="w-full max-w-md space-y-8 bg-white p-8 rounded-xl shadow-lg">
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+                        Join the AIIVR Revolution!
+                    </h1>
+                    <p className="mt-2 text-sm text-gray-600 sm:text-base">
+                        Sign up now & get started!
                     </p>
-                )}
-            </div>
-        </Form>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Name */}
+                    <div className="space-y-2">
+                        <label htmlFor='name' className="block text-sm font-medium text-gray-700">
+                            Full Name
+                        </label>
+                        <input 
+                            type="text" 
+                            id="name" 
+                            name="name" 
+                            autoComplete="name" 
+                            required
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-400"
+                            placeholder="Enter your full name"
+                        />
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-2">
+                        <label htmlFor='email' className="block text-sm font-medium text-gray-700">
+                            Email
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            autoComplete="email" 
+                            required
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-400"
+                            placeholder="Enter your email"
+                        />
+                    </div>
+
+                    {/* Password */}
+                    <div className="space-y-2">
+                        <label htmlFor='password' className="block text-sm font-medium text-gray-700">
+                            Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            autoComplete="new-password" 
+                            required
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-400"
+                            placeholder="Create password"
+                        />
+                    </div>
+
+                    {/* Role */}
+                    <div className="space-y-2">
+                        <label htmlFor='role' className="block text-sm font-medium text-gray-700">
+                            Role
+                        </label>
+                        <select 
+                            id="role" 
+                            name="role" 
+                            required
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900"
+                        >
+                            <option value="AGENT">Agent</option>
+                            <option value="SUPERVISOR">Supervisor</option>
+                            <option value="ADMIN">Admin</option>
+                        </select>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button 
+                        type="submit" 
+                        disabled={isPending}
+                        className={`w-full py-3 px-4 rounded-lg text-white font-medium transition-all duration-200 ease-in-out
+                            ${isPending 
+                                ? 'bg-blue-400 cursor-not-allowed' 
+                                : 'bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                            }`}
+                    >
+                        {isPending ? (
+                            <div className="flex items-center justify-center gap-2">
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <span>Creating account...</span>
+                            </div>
+                        ) : (
+                            'Create account'
+                        )}
+                    </button>
+
+                    {/* Error Message */}
+                    {state?.message && state.message.length > 0 && (
+                        <div className="rounded-lg bg-red-50 p-4">
+                            <p className="text-sm text-red-700 text-center">
+                                {state.message}
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Sign In Link */}
+                    <div className="text-center">
+                        <p className="text-sm text-gray-600">
+                            Already have an account?{' '}
+                            <Link 
+                                href="/signin" 
+                                className="font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                            >
+                                Sign in here
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </Form>
+        </div>
     )
 }
 
