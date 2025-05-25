@@ -2,7 +2,7 @@
 import  prisma from "@/lib/prisma";
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from "@oslojs/encoding";
 import { sha256 } from "@oslojs/crypto/sha2";
-import type { Session, User } from "@prisma/client";
+import type { Session, User, UserRole } from "@prisma/client";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -113,13 +113,15 @@ export const verifyPassword = async (password: string, hash: string) => {
     return passwordHash === hash;
 }
 
-export const registerUser = async (email: string, password: string) => {
+export const registerUser = async (email: string, password: string, name: string, role: UserRole = "AGENT") => {
     const passwordHash = await hashPassword(password);
     try {
         const user = await prisma.user.create({
             data: {
                 email,
                 passwordHash,
+                name,
+                role,
             }
         });
         const safeUser = { ...user, passwordHash: undefined };
