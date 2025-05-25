@@ -8,7 +8,7 @@ const SignUpSchema = zod.object({
     email: zod.string().email(),
     password: zod.string().min(8),
     name: zod.string().min(2),
-    role: zod.enum(['AGENT', 'SUPERVISOR', 'ADMIN']).default('AGENT')
+    role: zod.enum(['AGENT', 'SUPERVISOR']).default('AGENT')
 });
 
 export default async function SignUpPage() {

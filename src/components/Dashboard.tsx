@@ -15,6 +15,7 @@ import {
 import { Line, Doughnut } from 'react-chartjs-2';
 import { User, UserRole } from '@prisma/client';
 import { PhoneIcon, UserGroupIcon, ClockIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import AgentStatus from './AgentStatus';
 
 type SafeUser = Omit<User, 'passwordHash'>;
 
@@ -31,89 +32,78 @@ ChartJS.register(
 
 interface KPI {
   label: string;
-  value: number;
-  change: number;
-  trend: 'up' | 'down' | 'neutral';
-  icon: React.ElementType;
+  value: string | number;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  change?: string;
 }
 
 interface AgentStatus {
-  id: number;
-  name: string;
-  status: 'online' | 'offline' | 'paused';
-  pauseReason?: string;
+  userId: number;
+  status: 'ONLINE' | 'OFFLINE' | 'PAUSED';
+  pauseReason?: string | null;
   lastActive: Date;
-  currentCall?: {
-    type: 'inbound' | 'outbound';
-    duration: number;
-    contact: string;
-  };
 }
-
-const mockKPIs: KPI[] = [
-  {
-    label: 'Total Calls',
-    value: 156,
-    change: 12,
-    trend: 'up',
-    icon: PhoneIcon,
-  },
-  {
-    label: 'Average Handle Time',
-    value: 245,
-    change: -8,
-    trend: 'down',
-    icon: ClockIcon,
-  },
-  {
-    label: 'First Call Resolution',
-    value: 78,
-    change: 5,
-    trend: 'up',
-    icon: ChartBarIcon,
-  },
-  {
-    label: 'Active Agents',
-    value: 12,
-    change: 2,
-    trend: 'up',
-    icon: UserGroupIcon,
-  },
-];
 
 interface DashboardProps {
-  currentUser: SafeUser;
+  user: SafeUser;
 }
 
-export default function Dashboard({ currentUser }: DashboardProps) {
-  const [timeRange, setTimeRange] = useState('today');
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
+export default function Dashboard({ user }: DashboardProps) {
   const [agentStatuses, setAgentStatuses] = useState<AgentStatus[]>([]);
+  const [timeRange, setTimeRange] = useState('today');
 
   // Mock data for agent statuses
   useEffect(() => {
-    // This would be replaced with actual API call
     setAgentStatuses([
       {
-        id: 1,
-        name: 'John Doe',
-        status: 'online',
+        userId: 1,
+        status: 'ONLINE',
         lastActive: new Date(),
-        currentCall: {
-          type: 'inbound',
-          duration: 245,
-          contact: '+1234567890',
-        },
       },
       {
-        id: 2,
-        name: 'Jane Smith',
-        status: 'paused',
-        pauseReason: 'Lunch',
+        userId: 2,
+        status: 'PAUSED',
+        pauseReason: 'LUNCH',
         lastActive: new Date(),
       },
     ]);
   }, []);
+
+  const handleResumeAgent = (agentId: number) => {
+    setAgentStatuses((prev) =>
+      prev.map((status) =>
+        status.userId === agentId
+          ? { ...status, status: 'ONLINE', pauseReason: null }
+          : status
+      )
+    );
+  };
+
+  const kpis: KPI[] = [
+    {
+      label: 'Total Calls',
+      value: '1,234',
+      icon: PhoneIcon,
+      change: '+12%',
+    },
+    {
+      label: 'Average Handle Time',
+      value: '4m 32s',
+      icon: ClockIcon,
+      change: '-5%',
+    },
+    {
+      label: 'Active Agents',
+      value: agentStatuses.filter((status) => status.status === 'ONLINE').length,
+      icon: UserGroupIcon,
+    },
+    {
+      label: 'First Call Resolution',
+      value: '85%',
+      icon: ChartBarIcon,
+      change: '+2%',
+    },
+  ];
 
   const callVolumeData = {
     labels: ['9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
@@ -143,17 +133,15 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     ],
   };
 
-  const isSupervisor = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN';
-
   return (
     <div className="space-y-6">
       {/* Header with Time Range Selector */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-xl font-semibold">Dashboard</h2>
-          {isSupervisor && (
+          {user.role === 'SUPERVISOR' && (
             <p className="text-sm text-gray-500 mt-1">
-              {selectedAgent ? 'Viewing Agent Details' : 'Overview'}
+              {agentStatuses.length > 0 ? 'Viewing Agent Details' : 'Overview'}
             </p>
           )}
         </div>
@@ -192,77 +180,50 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       </div>
 
       {/* Agent Status Section (Supervisor View) */}
-      {isSupervisor && (
+      {user.role === 'SUPERVISOR' && (
         <div className="bg-white rounded-lg shadow">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Agent Status</h3>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {agentStatuses.map((agent) => (
-              <div
-                key={agent.id}
-                className="p-4 hover:bg-gray-50 cursor-pointer"
-                onClick={() => setSelectedAgent(agent.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`h-3 w-3 rounded-full ${
-                      agent.status === 'online' ? 'bg-green-500' :
-                      agent.status === 'paused' ? 'bg-yellow-500' :
-                      'bg-gray-500'
-                    }`} />
-                    <span className="font-medium">{agent.name}</span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {agent.status === 'paused' && agent.pauseReason && (
-                      <span className="text-yellow-600">{agent.pauseReason}</span>
-                    )}
-                    {agent.currentCall && (
-                      <span className="text-blue-600">
-                        On call: {agent.currentCall.contact}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="px-4 py-5 sm:p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Agent Status</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {agentStatuses.map((status) => (
+                <AgentStatus
+                  key={status.userId}
+                  agent={{ id: status.userId, name: `Agent ${status.userId}`, role: 'AGENT' } as SafeUser}
+                  isSupervisor
+                  onResumeAgent={handleResumeAgent}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {mockKPIs.map((kpi) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {kpis.map((kpi) => (
           <div
             key={kpi.label}
             className="bg-white rounded-lg shadow p-6"
           >
             <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <kpi.icon className="h-6 w-6 text-blue-600" />
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <kpi.icon className="h-6 w-6 text-indigo-600" />
               </div>
-              <h3 className="ml-3 text-sm font-medium text-gray-500">{kpi.label}</h3>
-            </div>
-            <div className="mt-2 flex items-baseline">
-              <p className="text-2xl font-semibold text-gray-900">
-                {kpi.label === 'Average Handle Time'
-                  ? `${kpi.value}s`
-                  : kpi.label === 'First Call Resolution' || kpi.label === 'Customer Satisfaction'
-                  ? `${kpi.value}%`
-                  : kpi.value}
-              </p>
-              <p
-                className={`ml-2 text-sm font-medium ${
-                  kpi.trend === 'up'
-                    ? 'text-green-600'
-                    : kpi.trend === 'down'
-                    ? 'text-red-600'
-                    : 'text-gray-500'
-                }`}
-              >
-                {kpi.change > 0 ? '+' : ''}
-                {kpi.change}%
-              </p>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">{kpi.label}</p>
+                <p className="text-2xl font-semibold text-gray-900">{kpi.value}</p>
+                {kpi.change && (
+                  <p
+                    className={`text-sm ${
+                      kpi.change.startsWith('+')
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`}
+                  >
+                    {kpi.change}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         ))}

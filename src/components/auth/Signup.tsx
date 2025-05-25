@@ -87,7 +87,6 @@ const SignUp = ({action}: SignUpProps) => {
                         >
                             <option value="AGENT">Agent</option>
                             <option value="SUPERVISOR">Supervisor</option>
-                            <option value="ADMIN">Admin</option>
                         </select>
                     </div>
 

@@ -12,6 +12,7 @@ import {
 import { Tab } from '@headlessui/react';
 import CallLogs from '@/components/CallLogs';
 import Dashboard from '@/components/Dashboard';
+import SupervisorDashboard from '@/components/SupervisorDashboard';
 import AgentStatus from '@/components/AgentStatus';
 import Queries from '@/components/Queries';
 import { getCurrentSession, signOut } from '@/actions/auth';
@@ -25,155 +26,128 @@ function classNames(...classes: string[]) {
 }
 
 export default function Home() {
+  const [user, setUser] = useState<SafeUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const [isPaused, setIsPaused] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState('Available');
-  const [currentUser, setCurrentUser] = useState<SafeUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
+    const fetchUser = async () => {
       try {
-        const session = await getCurrentSession();
-        if (session?.user) {
-          setCurrentUser(session.user);
-        } else {
+        const { user } = await getCurrentSession();
+        if (!user) {
           router.push('/signin');
+          return;
         }
+        setUser(user);
       } catch (error) {
-        console.error('Error loading session:', error);
+        console.error('Error fetching user:', error);
         router.push('/signin');
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    loadUser();
+
+    fetchUser();
   }, [router]);
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.push('/signin');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  if (!currentUser) {
+  if (!user) {
     return null;
   }
 
-  const tabs = [
-    { name: 'Calls', icon: PhoneIcon, component: CallLogs },
-    { name: 'Dashboard', icon: ChartBarIcon, component: Dashboard },
-    { name: 'Agent Status', icon: UserGroupIcon, component: AgentStatus },
-    { name: 'Queries', icon: ClipboardDocumentListIcon, component: Queries },
-  ];
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/signin');
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">AIIVR Dashboard</h1>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">
-                {currentUser.name} ({currentUser.role})
-              </span>
+      {/* Navigation */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex">
+              <div className="flex-shrink-0 flex items-center">
+                <h1 className="text-xl font-bold text-gray-900">AIIVR</h1>
+              </div>
+            </div>
+            <div className="flex items-center">
+              <span className="text-gray-700 mr-4">{user.name}</span>
               <button
                 onClick={handleSignOut}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors"
               >
-                Sign out
+                Sign Out
               </button>
-              {currentUser.role !== 'ADMIN' && (
-                <>
-                  <button
-                    onClick={() => setIsPaused(!isPaused)}
-                    className={`inline-flex items-center px-4 py-2 rounded-md ${
-                      isPaused ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                    } text-white`}
-                  >
-                    {isPaused ? (
-                      <>
-                        <PauseIcon className="h-5 w-5 mr-2" />
-                        Paused
-                      </>
-                    ) : (
-                      <>
-                        <PlayIcon className="h-5 w-5 mr-2" />
-                        Active
-                      </>
-                    )}
-                  </button>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    aria-label="Select agent status"
-                  >
-                    <option>Available</option>
-                    <option>Lunch</option>
-                    <option>Bathroom</option>
-                    <option>Smoke</option>
-                    <option>On Leave</option>
-                    <option>Case Work</option>
-                  </select>
-                </>
-              )}
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <Tab.Group>
-          <Tab.List className="flex space-x-1 rounded-xl bg-white p-1 shadow">
-            {tabs.map((tab) => (
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {user.role === 'SUPERVISOR' ? (
+          <SupervisorDashboard user={user} />
+        ) : (
+          <Tab.Group>
+            <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
               <Tab
-                key={tab.name}
                 className={({ selected }) =>
-                  classNames(
-                    'w-full rounded-lg py-2.5 text-sm font-medium leading-5',
-                    'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-                    selected
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                  )
+                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5
+                  ${selected
+                    ? 'bg-white text-blue-700 shadow'
+                    : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                  }`
                 }
               >
-                <div className="flex items-center justify-center">
-                  <tab.icon className="h-5 w-5 mr-2" />
-                  {tab.name}
-                </div>
+                Dashboard
               </Tab>
-            ))}
-          </Tab.List>
-          <Tab.Panels className="mt-4">
-            {tabs.map((tab) => (
-              <Tab.Panel
-                key={tab.name}
-                className="rounded-xl bg-white p-6 shadow"
+              <Tab
+                className={({ selected }) =>
+                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5
+                  ${selected
+                    ? 'bg-white text-blue-700 shadow'
+                    : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                  }`
+                }
               >
-                {tab.name === 'Queries' ? (
-                  <Queries currentUser={currentUser} />
-                ) : (
-                  <tab.component currentUser={currentUser} />
-                )}
+                Calls
+              </Tab>
+              <Tab
+                className={({ selected }) =>
+                  `w-full rounded-lg py-2.5 text-sm font-medium leading-5
+                  ${selected
+                    ? 'bg-white text-blue-700 shadow'
+                    : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                  }`
+                }
+              >
+                Queries
+              </Tab>
+            </Tab.List>
+            <Tab.Panels className="mt-4">
+              <Tab.Panel>
+                <div className="space-y-6">
+                  <AgentStatus agent={user} />
+                  <Dashboard user={user} />
+                </div>
               </Tab.Panel>
-            ))}
-          </Tab.Panels>
-        </Tab.Group>
+              <Tab.Panel>
+                <CallLogs currentUser={user} />
+              </Tab.Panel>
+              <Tab.Panel>
+                <Queries currentUser={user} />
+              </Tab.Panel>
+            </Tab.Panels>
+          </Tab.Group>
+        )}
       </main>
     </div>
   );
