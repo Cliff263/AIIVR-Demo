@@ -1,0 +1,28 @@
+
+One of the systems is an AIIVR( Artificial Intelligent Integrated Voice Response System) which is primarily used by Government departments and Municipalities. We also aim to go into the private sector and expand the business across Africa hence the need to have the proper skillset.
+The task at hand is to design a User Friendly IVR homepage with the minimum being required:
+
+1. Call Logs & Recordings
+Home Screen (Calls Tab)
+Display a consolidated log of all calls (inbound, outbound, missed) for the logged-in agent.
+Clickable Call Entries: Selecting a call should show:
+Call details (timestamp, duration, number/contact).
+Recording playback (accessible to all authorized users).
+Immutable recordings: Ensure no user can delete/modify recordings.
+2. Dashboard & Navigation
+Agent Dashboard and Supervisor dashboard
+Provide a real-time overview of KPIs (e.g., call volume, average handle time).
+An online/On Queue status once logged in to AIVIR
+Incoming call status (As requested by Call centre supervisor Mr Heinrich)
+Embedded Link: Redirect users to a separate webpage for detailed analytics (prevents clutter).
+3. Agent Caller Status monitoring
+Dynamic Pause Button
+Toggle between "Pause/Play" with clear visual indicators (e.g., color-coding: red for paused, green for active).
+Status Options Dropdown:
+Predefined options: Lunch, Bathroom, Smoke, On Leave, Case Work.
+Auto-queue adjustment: Pausing triggers proper queue management (e.g., call redistribution).
+4. Additional Recommendations
+Permissions Hierarchy:
+Supervisors: Access to all agent dashboards/call logs.
+Supervisors: Ability to put back agent on queue if pause time exceeds their desired time.
+5. Queries opened and assigned 

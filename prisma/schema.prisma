@@ -24,6 +24,22 @@ enum CallType {
   MISSED
 }
 
+enum CallStatus {
+  QUEUED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  TRANSFERRED
+}
+
+enum CallOutcome {
+  SUCCESSFUL
+  UNSUCCESSFUL
+  CALLBACK_REQUESTED
+  TRANSFERRED
+  VOICEMAIL
+}
+
 enum AgentStatus {
   ONLINE
   OFFLINE
@@ -36,6 +52,31 @@ enum PauseReason {
   SMOKE
   ON_LEAVE
   CASE_WORK
+  TRAINING
+  MEETING
+  SYSTEM_ISSUE
+}
+
+enum QueryStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum QueryPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RecordingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 model User {
@@ -56,6 +97,9 @@ model User {
   supervisedBy  User?     @relation("SupervisorAgent", fields: [supervisorId], references: [id])
   supervisorId  Int?
   agents        User[]    @relation("SupervisorAgent")
+  performance   PerformanceMetrics[]
+  statusHistory AgentStatusHistory[]
+  qualityEvaluations CallQuality[] @relation("QualityEvaluator")
 }
 
 model Session {
@@ -66,29 +110,39 @@ model Session {
 }
 
 model Call {
-  id          Int       @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   type        CallType
-  timestamp   DateTime  @default(now())
-  duration    Int       // Duration in seconds
+  status      CallStatus  @default(QUEUED)
+  outcome     CallOutcome?
+  timestamp   DateTime    @default(now())
+  duration    Int         // Duration in seconds
   phoneNumber String
   contact     String?
+  notes       String?
+  tags        String[]
   agentId     Int
-  agent       User      @relation("AgentCalls", fields: [agentId], references: [id])
+  agent       User        @relation("AgentCalls", fields: [agentId], references: [id])
   recording   Recording?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  quality     CallQuality?
+  queries     Query[]     @relation("QueryCalls")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Recording {
-  id          Int       @id @default(autoincrement())
-  url         String    @unique
-  duration    Int       // Duration in seconds
-  callId      Int       @unique
-  call        Call      @relation(fields: [callId], references: [id])
-  uploadedBy  Int
-  uploader    User      @relation(fields: [uploadedBy], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            Int             @id @default(autoincrement())
+  url           String          @unique
+  duration      Int             // Duration in seconds
+  format        String          // e.g., "mp3", "wav"
+  storagePath   String          // Path in storage bucket
+  status        RecordingStatus @default(PENDING)
+  transcription String?         // Transcribed text
+  callId        Int             @unique
+  call          Call            @relation(fields: [callId], references: [id])
+  uploadedBy    Int
+  uploader      User            @relation(fields: [uploadedBy], references: [id])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 model AgentStatusInfo {
@@ -101,14 +155,52 @@ model AgentStatusInfo {
   updatedAt   DateTime    @updatedAt
 }
 
+model AgentStatusHistory {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id])
+  status      AgentStatus
+  pauseReason PauseReason?
+  timestamp   DateTime    @default(now())
+}
+
 model Query {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String
-  status      String    // open, in-progress, resolved
-  priority    String    // low, medium, high
-  assignedTo  Int
-  assignee    User      @relation("AssignedQueries", fields: [assignedTo], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            Int           @id @default(autoincrement())
+  title         String
+  description   String
+  status        QueryStatus   @default(OPEN)
+  priority      QueryPriority @default(MEDIUM)
+  category      String?
+  dueDate       DateTime?
+  resolution    String?
+  assignedTo    Int
+  assignee      User          @relation("AssignedQueries", fields: [assignedTo], references: [id])
+  relatedCalls  Call[]        @relation("QueryCalls")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model CallQuality {
+  id          Int      @id @default(autoincrement())
+  callId      Int      @unique
+  call        Call     @relation(fields: [callId], references: [id])
+  score       Int      // 1-5 rating
+  notes       String?
+  evaluatedBy Int
+  evaluator   User     @relation("QualityEvaluator", fields: [evaluatedBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PerformanceMetrics {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  date          DateTime @default(now())
+  callsHandled  Int      @default(0)
+  avgCallTime   Int      // Average call duration in seconds
+  satisfaction  Float    // Customer satisfaction score
+  resolution    Float    // First call resolution rate
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
