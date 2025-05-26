@@ -18,6 +18,12 @@ enum UserRole {
   SUPERVISOR
 }
 
+enum UserStatus {
+  ONLINE
+  PAUSED
+  OFFLINE
+}
+
 enum CallType {
   INBOUND
   OUTBOUND
@@ -80,31 +86,31 @@ enum RecordingStatus {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  role          UserRole  @default(AGENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  // Relations
-  sessions      Session[]
-  calls         Call[]    @relation("AgentCalls")
-  recordings    Recording[]
-  status        AgentStatusInfo?
-  queries       Query[]   @relation("AssignedQueries")
-  supervisedBy  User?     @relation("SupervisorAgent", fields: [supervisorId], references: [id])
-  supervisorId  Int?
-  agents        User[]    @relation("SupervisorAgent")
-  performance   PerformanceMetrics[]
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         UserRole      @default(AGENT)
+  status       UserStatus    @default(OFFLINE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     Session[]
+  calls        Call[]        @relation("AgentCalls")
+  recordings   Recording[]
+  supervisor   User?         @relation("SupervisorToAgent", fields: [supervisorId], references: [id])
+  supervisorId String?
+  agents       User[]        @relation("SupervisorToAgent")
+  supervisorKey SupervisorKey?
+  statusInfo   AgentStatusInfo?
+  queries      Query[]       @relation("AssignedQueries")
+  performance  PerformanceMetrics[]
   statusHistory AgentStatusHistory[]
   qualityEvaluations CallQuality[] @relation("QualityEvaluator")
 }
 
 model Session {
   id        String   @id
-  userId    Int
+  userId    String
   expiresAt DateTime
   user      User     @relation(references: [id], fields: [userId], onDelete: Cascade)
 }
@@ -120,7 +126,7 @@ model Call {
   contact     String?
   notes       String?
   tags        String[]
-  agentId     Int
+  agentId     String
   agent       User        @relation("AgentCalls", fields: [agentId], references: [id])
   recording   Recording?
   quality     CallQuality?
@@ -139,7 +145,7 @@ model Recording {
   transcription String?         // Transcribed text
   callId        Int             @unique
   call          Call            @relation(fields: [callId], references: [id])
-  uploadedBy    Int
+  uploadedBy    String
   uploader      User            @relation(fields: [uploadedBy], references: [id])
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -147,7 +153,7 @@ model Recording {
 
 model AgentStatusInfo {
   id          Int         @id @default(autoincrement())
-  userId      Int         @unique
+  userId      String      @unique
   user        User        @relation(fields: [userId], references: [id])
   status      AgentStatus @default(OFFLINE)
   pauseReason PauseReason?
@@ -157,7 +163,7 @@ model AgentStatusInfo {
 
 model AgentStatusHistory {
   id          Int         @id @default(autoincrement())
-  userId      Int
+  userId      String
   user        User        @relation(fields: [userId], references: [id])
   status      AgentStatus
   pauseReason PauseReason?
@@ -173,7 +179,7 @@ model Query {
   category      String?
   dueDate       DateTime?
   resolution    String?
-  assignedTo    Int
+  assignedTo    String
   assignee      User          @relation("AssignedQueries", fields: [assignedTo], references: [id])
   relatedCalls  Call[]        @relation("QueryCalls")
   createdAt     DateTime      @default(now())
@@ -186,7 +192,7 @@ model CallQuality {
   call        Call     @relation(fields: [callId], references: [id])
   score       Int      // 1-5 rating
   notes       String?
-  evaluatedBy Int
+  evaluatedBy String
   evaluator   User     @relation("QualityEvaluator", fields: [evaluatedBy], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -194,7 +200,7 @@ model CallQuality {
 
 model PerformanceMetrics {
   id            Int      @id @default(autoincrement())
-  userId        Int
+  userId        String
   user          User     @relation(fields: [userId], references: [id])
   date          DateTime @default(now())
   callsHandled  Int      @default(0)
@@ -203,4 +209,13 @@ model PerformanceMetrics {
   resolution    Float    // First call resolution rate
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model SupervisorKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  createdAt DateTime @default(now())
+  used      Boolean  @default(false)
+  usedBy    User?    @relation(fields: [usedById], references: [id])
+  usedById  String?  @unique
 }

@@ -5,8 +5,7 @@ import { sha256 } from "@oslojs/crypto/sha2";
 import type { User, Session, UserRole } from "@prisma/client";
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { compare } from "bcryptjs";
-import { RequestCookies } from "next/dist/server/web/spec-extension/cookies";
+import { compare, hash } from "bcryptjs";
 import { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 
 export async function generateSessionToken(): Promise<string> {
@@ -16,7 +15,7 @@ export async function generateSessionToken(): Promise<string> {
 	return token;
 }
 
-export async function createSession(token: string, userId: number): Promise<Session> {
+export async function createSession(token: string, userId: string): Promise<Session> {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
 	return prisma.session.create({
@@ -129,6 +128,36 @@ export const signIn = async (email: string, password: string) => {
 		const session = await createSession(token, user.id);
 		await setSessionTokenCookie(token, session.expiresAt);
 		
+		// Update both user status and agent status to ONLINE
+		await prisma.$transaction([
+			// Update user status
+			prisma.user.update({
+				where: { id: user.id },
+				data: { status: 'ONLINE' }
+			}),
+			// Update agent status info
+			prisma.agentStatusInfo.upsert({
+				where: {
+					userId: user.id,
+				},
+				update: {
+					status: 'ONLINE',
+					lastActive: new Date(),
+				},
+				create: {
+					userId: user.id,
+					status: 'ONLINE',
+				},
+			}),
+			// Create status history entry
+			prisma.agentStatusHistory.create({
+				data: {
+					userId: user.id,
+					status: 'ONLINE',
+				},
+			})
+		]);
+		
 		const safeUser = { 
 			...user, 
 			passwordHash: undefined 
@@ -151,7 +180,7 @@ export async function invalidateSession(sessionId: string): Promise<void> {
 	await prisma.session.delete({ where: { id: sessionId } });
 }
 
-export async function invalidateAllSessions(userId: number): Promise<void> {
+export async function invalidateAllSessions(userId: string): Promise<void> {
 	await prisma.session.deleteMany({
 		where: {
 			userId: userId
@@ -161,7 +190,7 @@ export async function invalidateAllSessions(userId: number): Promise<void> {
 
 {/* User register, signin, signout */}
 export const hashPassword = async (password: string) => {
-	return encodeHexLowerCase(sha256(new TextEncoder().encode(password)));
+	return hash(password, 10); // 10 is the salt rounds
 };
 
 export const registerUser = async (email: string, password: string, name: string, role: UserRole = "AGENT") => {
@@ -187,21 +216,61 @@ export const registerUser = async (email: string, password: string, name: string
 };
 
 export const signOut = async () => {
-	const cookieStore = await cookies();
-	const token = cookieStore.get("session")?.value;
-	if (token) {
-		const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-		await invalidateSession(sessionId);
+	try {
+		const cookieStore = await cookies();
+		const token = cookieStore.get("session")?.value;
+		
+		if (token) {
+			const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+			const session = await prisma.session.findUnique({
+				where: { id: sessionId },
+				include: { user: true }
+			});
+
+			if (session?.user) {
+				// Update user status to OFFLINE
+				await prisma.agentStatusInfo.upsert({
+					where: {
+						userId: session.user.id,
+					},
+					update: {
+						status: 'OFFLINE',
+						lastActive: new Date(),
+					},
+					create: {
+						userId: session.user.id,
+						status: 'OFFLINE',
+					},
+				});
+
+				// Create status history entry
+				await prisma.agentStatusHistory.create({
+					data: {
+						userId: session.user.id,
+						status: 'OFFLINE',
+					},
+				});
+			}
+
+			await invalidateSession(sessionId);
+		}
+
+		// Clear the session cookie with proper expiration
+		const cookie: ResponseCookie = {
+			name: "session",
+			value: "",
+			path: "/",
+			expires: new Date(0), // Set to past date to expire immediately
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "lax",
+		};
+		cookieStore.set(cookie);
+		
+		return { success: true };
+	} catch (error) {
+		console.error('Sign out error:', error);
+		return { success: false, error: "Failed to sign out" };
 	}
-	const cookie: ResponseCookie = {
-		name: "session",
-		value: "",
-		path: "/",
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "lax",
-		maxAge: 0,
-	};
-	cookieStore.set(cookie);
 };
 

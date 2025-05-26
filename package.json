@@ -6,10 +6,13 @@
     "dev": "ts-node --project tsconfig.server.json src/server.ts",
     "build": "next build",
     "start": "NODE_ENV=production ts-node --project tsconfig.server.json src/server.ts",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-supervisor-key": "ts-node --project scripts/tsconfig.json scripts/generate-supervisor-key.ts",
+    "delete-all-data": "ts-node --project scripts/tsconfig.json scripts/delete-all-data.ts"
   },
   "dependencies": {
     "@geist-ui/core": "^2.3.8",
+    "@heroicons/react": "^2.2.0",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@prisma/client": "^6.8.2",

@@ -5,6 +5,17 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
+    // Only attempt to connect and join rooms if a valid userId is provided
+    if (userId <= 0 || isNaN(userId)) {
+      console.warn('useSocket: Invalid userId provided, not connecting or joining rooms.', userId);
+      // Ensure existing socket is disconnected if userId becomes invalid
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
+
     // Get the base URL from the environment or use the current origin
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     console.log('Connecting to WebSocket server at:', baseUrl);
@@ -28,6 +39,12 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
     // Connection event handlers
     socket.on('connect', () => {
       console.log('WebSocket connected successfully');
+       // Join appropriate room based on role after successful connection
+      if (role === 'AGENT') {
+        socket.emit('join-agent-room', userId);
+      } else {
+        socket.emit('join-supervisor-room', userId);
+      }
     });
 
     socket.on('connect_error', (error) => {
@@ -60,21 +77,15 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
 
     socketRef.current = socket;
 
-    // Join appropriate room based on role
-    if (role === 'AGENT') {
-      socket.emit('join-agent-room', userId);
-    } else {
-      socket.emit('join-supervisor-room', userId);
-    }
-
-    // Cleanup on unmount
+    // Cleanup on unmount or when userId/role changes to invalid
     return () => {
-      if (socket.connected) {
+      if (socketRef.current && socketRef.current.connected) {
         console.log('Disconnecting WebSocket...');
-        socket.disconnect();
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
-  }, [userId, role]);
+  }, [userId, role]); // Re-run effect if userId or role changes
 
   const emitStatusChange = (status: string, pauseReason?: string) => {
     if (socketRef.current) {

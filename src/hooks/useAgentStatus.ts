@@ -12,11 +12,17 @@ const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function useAgentStatus(agentId: number, role: 'AGENT' | 'SUPERVISOR') {
   const [status, setStatus] = useState<AgentStatus | null>(null);
-  const { socket, emitStatusChange } = useSocket(agentId, role);
+  
+  // Ensure valid agentId
+  const validAgentId = typeof agentId === 'string' ? parseInt(agentId, 10) : agentId;
+  if (!validAgentId || isNaN(validAgentId)) {
+    console.warn('Invalid agentId passed to useAgentStatus/useSocket:', agentId);
+  }
+  const { socket, emitStatusChange } = useSocket(validAgentId, role);
   
   // SWR polling as fallback
   const { data, error, isLoading } = useSWR<AgentStatus>(
-    `/api/agent/${agentId}/status`,
+    `/api/agent/${validAgentId}/status`,
     fetcher,
     {
       refreshInterval: 5000, // Poll every 5 seconds

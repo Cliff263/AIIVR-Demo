@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 export default async function Home() {
   const { user } = await getCurrentSession();
   
+  // If no user is found, redirect to sign in
   if (!user) {
     redirect('/auth/signin');
   }
@@ -16,7 +17,14 @@ export default async function Home() {
     const agentData = await prisma.user.findUnique({
       where: { id: user.id },
       include: {
-        status: true,
+        statusInfo: true,
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
       },
     });
 
@@ -24,62 +32,64 @@ export default async function Home() {
       redirect('/auth/signin');
     }
 
-    // Type assertion for agent data
-    const typedAgentData = {
-      id: agentData.id,
-      name: agentData.name,
-      role: 'AGENT' as const,
-      status: agentData.status ? {
-        status: agentData.status.status,
-        pauseReason: agentData.status.pauseReason?.toString(),
+    // Transform user data to match AgentDashboard's expected type
+    const transformedUser = {
+      ...agentData,
+      agentStatus: agentData.statusInfo ? {
+        status: agentData.statusInfo.status,
+        pauseReason: agentData.statusInfo.pauseReason?.toString(),
       } : null,
     };
 
     return (
       <main className="min-h-screen bg-gray-50">
-        <AgentDashboard user={typedAgentData} />
-      </main>
-    );
-  } else if (user.role === 'SUPERVISOR') {
-    const supervisorData = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        agents: {
-          include: {
-            status: true,
-          },
-        },
-      },
-    });
-
-    if (!supervisorData) {
-      redirect('/auth/signin');
-    }
-
-    // Type assertion for supervisor data
-    const typedSupervisorData = {
-      id: supervisorData.id,
-      name: supervisorData.name,
-      role: 'SUPERVISOR' as const,
-      agents: supervisorData.agents.map(agent => ({
-        id: agent.id,
-        name: agent.name,
-        email: agent.email,
-        role: 'AGENT' as const,
-        status: agent.status ? {
-          status: agent.status.status,
-          pauseReason: agent.status.pauseReason?.toString(),
-        } : null,
-      })),
-    };
-
-    return (
-      <main className="min-h-screen bg-gray-50">
-        <SupervisorDashboard user={typedSupervisorData} />
+        <AgentDashboard user={transformedUser} />
       </main>
     );
   }
 
-  // If user has no role, redirect to sign in
-  redirect('/auth/signin');
+  // Handle supervisor role
+  const supervisorData = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+    },
+  });
+
+  if (!supervisorData) {
+    redirect('/auth/sign-in');
+  }
+
+  // Fetch all agents for the supervisor dashboard
+  const allAgents = await prisma.user.findMany({
+    where: { role: 'AGENT' },
+    include: {
+      statusInfo: true,
+    },
+  });
+
+  // Transform supervisor data (simplified as agents are now fetched separately)
+  const transformedSupervisor = {
+    id: supervisorData.id,
+    name: supervisorData.name,
+    role: 'SUPERVISOR' as const,
+    agents: allAgents.map(agent => ({
+      id: agent.id,
+      name: agent.name,
+      email: agent.email,
+      role: 'AGENT' as const,
+      status: agent.statusInfo ? {
+        status: agent.statusInfo.status,
+        pauseReason: agent.statusInfo.pauseReason?.toString(),
+      } : null,
+    })),
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <SupervisorDashboard user={transformedSupervisor} />
+    </main>
+  );
 }

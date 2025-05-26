@@ -26,3 +26,8 @@ Permissions Hierarchy:
 Supervisors: Access to all agent dashboards/call logs.
 Supervisors: Ability to put back agent on queue if pause time exceeds their desired time.
 5. Queries opened and assigned 
+
+
+
+
+
