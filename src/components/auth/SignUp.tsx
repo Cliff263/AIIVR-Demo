@@ -99,7 +99,7 @@ const SignUp = ({ action }: SignUpProps) => {
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
-            <Link href="/signin" className="font-medium text-indigo-600 hover:text-indigo-500">
+            <Link href="/auth/sign-in" className="font-medium text-indigo-600 hover:text-indigo-500">
               Sign in
             </Link>
           </p>
