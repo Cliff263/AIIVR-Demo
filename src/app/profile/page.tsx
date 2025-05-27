@@ -26,7 +26,8 @@ export default function ProfilePage() {
     pauseReason,
     isLoading: statusLoading,
     isConnected,
-    updateStatus,
+    error: statusError,
+    updateStatus
   } = useAgentStatus(user?.id || "");
   const { socket } = useSocket(user?.id || "", user?.role || "AGENT");
   const [statusState, setStatusState] = useState(status);
@@ -72,6 +73,7 @@ export default function ProfilePage() {
     };
   }, [user, agents]);
 
+  // Update statusState when status changes
   useEffect(() => {
     setStatusState(status);
   }, [status]);

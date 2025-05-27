@@ -121,16 +121,44 @@ export const verifyPassword = async (password: string, hash: string) => {
 };
 
 export const registerUser = async (name: string, email: string, password: string, supervisorKey?: string) => {
-	const passwordHash = await hashPassword(password);
 	try {
+		// Validate supervisor key if provided
+		if (supervisorKey) {
+			const validKey = await prisma.supervisorKey.findFirst({
+				where: {
+					key: supervisorKey,
+					used: false
+				}
+			});
+
+			if (!validKey) {
+				return {
+					user: null,
+					error: "Invalid or already used supervisor key"
+				};
+			}
+		}
+
+		const passwordHash = await hashPassword(password);
 		const user = await prisma.user.create({
 			data: {
 				name,
 				email,
 				passwordHash,
-				role: supervisorKey === process.env.SUPERVISOR_KEY ? "SUPERVISOR" : "AGENT"
+				role: supervisorKey ? "SUPERVISOR" : "AGENT"
 			}
 		});
+
+		// If supervisor key was used, mark it as used and link it to the user
+		if (supervisorKey) {
+			await prisma.supervisorKey.update({
+				where: { key: supervisorKey },
+				data: {
+					used: true,
+					usedById: user.id
+				}
+			});
+		}
 
 		await prisma.userActivityLog.create({
 			data: {
@@ -144,8 +172,14 @@ export const registerUser = async (name: string, email: string, password: string
 
 		const safeUser = { ...user, passwordHash: undefined };
 		return { user: safeUser, error: null };
-	} catch (error) {
+	} catch (error: any) {
 		console.error("Registration error:", error);
+		if (error.code === 'P2002') {
+			return {
+				user: null,
+				error: "Email already exists"
+			};
+		}
 		return {
 			user: null,
 			error: "Failed to create user"

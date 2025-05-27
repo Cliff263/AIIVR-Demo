@@ -35,16 +35,24 @@ export default function QueryManager({ role, agentId }: QueryManagerProps) {
         // Fetch queries
         const queriesResponse = await fetch('/api/queries');
         const queriesData = await queriesResponse.json();
-        setQueries(queriesData);
-
+        // Defensive: ensure queriesData is an array
+        setQueries(Array.isArray(queriesData) ? queriesData : Array.isArray(queriesData.queries) ? queriesData.queries : []);
         // Fetch agents if user is a supervisor
         if (role === 'SUPERVISOR') {
           const agentsResponse = await fetch('/api/agents');
-          const agentsData = await agentsResponse.json();
-          setAgents(agentsData);
+          let agentsData = [];
+          if (agentsResponse.ok) {
+            try {
+              agentsData = await agentsResponse.json();
+            } catch {
+              agentsData = [];
+            }
+          }
+          setAgents(Array.isArray(agentsData) ? agentsData : Array.isArray(agentsData.agents) ? agentsData.agents : []);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
+        setQueries([]); // fallback to empty array on error
       }
     };
 

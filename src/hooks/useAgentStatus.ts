@@ -1,94 +1,94 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSocket } from "./useSocket";
-import { AgentStatus, PauseReason } from "@prisma/client";
-import { StatusService } from "@/lib/statusService";
+import { getAgentStatus } from "@/actions/status";
+import type { AgentStatusInfo, AgentStatus } from "@prisma/client";
 
-export type UseAgentStatusReturn = {
-  status: AgentStatus;
-  pauseReason: PauseReason | null;
-  isLoading: boolean;
-  error: Error | null;
-  updateStatus: (status: AgentStatus, pauseReason?: PauseReason) => Promise<void>;
-  isConnected: boolean;
-};
-
-export function useAgentStatus(userId: string): UseAgentStatusReturn {
-  const [status, setStatus] = useState<AgentStatus>("OFFLINE");
-  const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const { socket, isConnected } = useSocket(parseInt(userId), 'AGENT');
+export function useAgentStatus(userId: string) {
+  const [status, setStatus] = useState<AgentStatusInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStatus = async () => {
+    let mounted = true;
+
+    async function fetchStatus() {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        setIsLoading(true);
-        const statusInfo = await StatusService.getAgentStatus(userId);
-        if (statusInfo) {
-          setStatus(statusInfo.status);
-          setPauseReason(statusInfo.pauseReason);
+        const { status: newStatus, error: statusError } = await getAgentStatus(userId);
+        if (mounted) {
+          if (statusError) {
+            if (statusError === "Unauthorized") {
+              // Handle unauthorized error gracefully
+              setStatus({ status: "OFFLINE", pauseReason: null } as AgentStatusInfo);
+              setError(null);
+            } else {
+              setError(statusError);
+            }
+          } else {
+            setStatus(newStatus);
+            setError(null);
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch status'));
+        if (mounted) {
+          setError("Failed to fetch status");
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    };
+    }
 
     fetchStatus();
-  }, [userId]);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleStatusUpdate = (data: { status: AgentStatus; pauseReason?: PauseReason }) => {
-      setStatus(data.status);
-      if (data.pauseReason) {
-        setPauseReason(data.pauseReason);
-      }
-    };
-
-    socket.on('agent-status-update', handleStatusUpdate);
 
     return () => {
-      socket.off('agent-status-update', handleStatusUpdate);
+      mounted = false;
     };
-  }, [socket]);
+  }, [userId]);
 
-  const updateStatus = async (newStatus: AgentStatus, newPauseReason?: PauseReason) => {
-    if (!socket || !isConnected) {
-      throw new Error('Socket not connected');
+  const updateStatus = async (newStatus: AgentStatus) => {
+    if (!userId) {
+      throw new Error("No user ID provided");
     }
 
     try {
-      await StatusService.updateAgentStatus(userId, {
-        status: newStatus,
-        pauseReason: newPauseReason
+      const response = await fetch("/api/agent/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
       });
 
-      socket.emit('status-change', {
-        status: newStatus,
-        pauseReason: newPauseReason
-      });
-
-      setStatus(newStatus);
-      if (newPauseReason) {
-        setPauseReason(newPauseReason);
+      if (!response.ok) {
+        throw new Error("Failed to update status");
       }
+
+      const data = await response.json();
+      setStatus(data);
+      setError(null);
+      return data;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to update status'));
+      const errorMessage = err instanceof Error ? err.message : "Failed to update status";
+      setError(errorMessage);
       throw err;
     }
   };
 
-  return {
-    status,
-    pauseReason,
-    isLoading,
+  return { 
+    status: status?.status || 'OFFLINE',
+    pauseReason: status?.pauseReason,
+    isLoading: loading,
     error,
-    updateStatus,
-    isConnected,
+    isConnected: true, // This will be updated when we implement socket connection
+    updateStatus
   };
 } 

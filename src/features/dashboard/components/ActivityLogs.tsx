@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import * as RadixPopover from '@radix-ui/react-popover';
 import { CalendarIcon, FileJson, FileText } from "lucide-react";
-import { useWebSocket } from "@/components/WebSocketProvider";
+import { useSocket } from "@/hooks/useSocket";
 import { toast } from "sonner";
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/dist/style.css';
 
 const ACTIONS = [
   "LOGIN",
@@ -26,7 +27,14 @@ const ACTIONS = [
   "PERMISSION_CHANGE",
 ] as const;
 
-export function ActivityLogs() {
+// Add prop interface for ActivityLogs
+interface ActivityLogsProps {
+  userId: number;
+  role: 'AGENT' | 'SUPERVISOR';
+}
+
+// Update function signature to accept props
+export function ActivityLogs({ userId, role }: ActivityLogsProps) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -37,7 +45,7 @@ export function ActivityLogs() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
-  const { socket } = useWebSocket();
+  const { socket } = useSocket(userId, role);
 
   const fetchLogs = async () => {
     try {
@@ -63,7 +71,7 @@ export function ActivityLogs() {
     }
   };
 
-  const handleExport = async (format: "csv" | "json") => {
+  const handleExport = async (fileFormat: "csv" | "json") => {
     try {
       const params = new URLSearchParams({
         ...(search && { search }),
@@ -71,7 +79,7 @@ export function ActivityLogs() {
         ...(selectedRole && { role: selectedRole }),
         ...(startDate && { startDate: startDate.toISOString() }),
         ...(endDate && { endDate: endDate.toISOString() }),
-        format,
+        format: fileFormat,
       });
 
       const response = await fetch(`/api/activity-logs/export?${params}`);
@@ -79,12 +87,12 @@ export function ActivityLogs() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `activity-logs-${format(new Date(), "yyyy-MM-dd")}.${format}`;
+      a.download = `activity-logs-${format(new Date(), "yyyy-MM-dd")}.${fileFormat}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success(`Exported logs as ${format.toUpperCase()}`);
+      toast.success(`Exported logs as ${fileFormat.toUpperCase()}`);
     } catch (error) {
       console.error("Failed to export logs:", error);
       toast.error("Failed to export logs");
@@ -177,12 +185,12 @@ export function ActivityLogs() {
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs border-rose-200 focus:border-rose-300 focus:ring-rose-300"
             />
-            <Select value={selectedAction} onValueChange={setSelectedAction}>
+            <Select value={selectedAction === '' ? 'all' : selectedAction} onValueChange={v => setSelectedAction(v === 'all' ? '' : v)}>
               <SelectTrigger className="w-[180px] border-rose-200 focus:border-rose-300 focus:ring-rose-300">
                 <SelectValue placeholder="Filter by action" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Actions</SelectItem>
+                <SelectItem value="all">All Actions</SelectItem>
                 {ACTIONS.map((action) => (
                   <SelectItem key={action} value={action}>
                     {action}
@@ -190,19 +198,19 @@ export function ActivityLogs() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <Select value={selectedRole === '' ? 'all' : selectedRole} onValueChange={v => setSelectedRole(v === 'all' ? '' : v)}>
               <SelectTrigger className="w-[180px] border-rose-200 focus:border-rose-300 focus:ring-rose-300">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Roles</SelectItem>
+                <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="AGENT">Agent</SelectItem>
                 <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
-              <Popover>
-                <PopoverTrigger asChild>
+              <RadixPopover.Root>
+                <RadixPopover.Trigger asChild>
                   <Button
                     variant="outline"
                     className="w-[240px] justify-start text-left font-normal border-rose-200 hover:bg-rose-50 hover:text-rose-600"
@@ -210,18 +218,18 @@ export function ActivityLogs() {
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {startDate ? format(startDate, "PPP") : "Start date"}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
+                </RadixPopover.Trigger>
+                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-rose-200">
+                  <DayPicker
                     mode="single"
                     selected={startDate}
                     onSelect={setStartDate}
                     initialFocus
                   />
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
+                </RadixPopover.Content>
+              </RadixPopover.Root>
+              <RadixPopover.Root>
+                <RadixPopover.Trigger asChild>
                   <Button
                     variant="outline"
                     className="w-[240px] justify-start text-left font-normal border-rose-200 hover:bg-rose-50 hover:text-rose-600"
@@ -229,16 +237,16 @@ export function ActivityLogs() {
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {endDate ? format(endDate, "PPP") : "End date"}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
+                </RadixPopover.Trigger>
+                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-rose-200">
+                  <DayPicker
                     mode="single"
                     selected={endDate}
                     onSelect={setEndDate}
                     initialFocus
                   />
-                </PopoverContent>
-              </Popover>
+                </RadixPopover.Content>
+              </RadixPopover.Root>
             </div>
             <Button
               variant="outline"

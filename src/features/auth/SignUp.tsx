@@ -30,7 +30,7 @@ export default function SignUp() {
       }
 
       router.push("/auth/sign-in");
-    } catch {
+    } catch (error) {
       setError("An error occurred. Please try again.");
     } finally {
       setIsPending(false);
@@ -41,10 +41,10 @@ export default function SignUp() {
     <div className="min-h-screen flex flex-col bg-white">
       {/* Top Banner */}
       <div className="w-full bg-black text-white text-center text-sm py-2">
-        AIIR CALL MANAGEMENT SYSTEM
-      </div><br></br>
+        AIIVR CALL CENTER MANAGEMENT SYSTEM
+      </div>
 
-      {/* Main Content */}
+      {/* Form Wrapper */}
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md bg-white rounded-lg p-8">
           <h1 className="text-2xl font-bold text-rose-600 text-center mb-2">
@@ -56,6 +56,7 @@ export default function SignUp() {
           <p className="text-center text-sm text-gray-600 font-semibold mb-6">
             Create your account to begin managing calls and teams
           </p>
+
           <Form action={handleSignUp} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">

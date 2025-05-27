@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const endDate = searchParams.get("endDate");
     const action = searchParams.get("action") || "";
     const role = searchParams.get("role") || "";
-    const format = searchParams.get("format") || "csv";
+    const fileFormat = searchParams.get("format") || "csv";
 
     const where = {
       AND: [
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     let content: string;
     let headers: Headers;
 
-    if (format === "json") {
+    if (fileFormat === "json") {
       content = JSON.stringify(logs, null, 2);
       headers = new Headers();
       headers.set("Content-Type", "application/json");

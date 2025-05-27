@@ -4,8 +4,7 @@ import { Server } from 'socket.io';
 import next from 'next';
 import { parse } from 'url';
 import { prisma } from './lib/prisma';
-import { AgentStatus, CallStatus, QueryStatus, PauseReason } from '@prisma/client';
-import { StatusService } from './lib/statusService';
+import type { AgentStatus, CallStatus, QueryStatus, PauseReason } from '@prisma/client';
 
 const port = parseInt(process.env.PORT || '3000', 10);
 const dev = process.env.NODE_ENV !== 'production';
@@ -46,56 +45,31 @@ app.prepare().then(() => {
 
     // Join agent's room
     socket.on('join-agent-room', async (agentId: number) => {
-      if (isNaN(agentId)) {
-        console.error('Invalid agentId received for join-agent-room:', agentId);
-        return;
-      }
-
-      socket.join(`agent-${agentId}`);
-      console.log(`Agent ${agentId} joined their room`);
-      
       try {
-        const statusInfo = await StatusService.getAgentStatus(agentId.toString());
-        
-        if (!statusInfo || statusInfo.status === 'OFFLINE') {
-          await StatusService.updateAgentStatus(agentId.toString(), {
-            status: 'ONLINE',
-            pauseReason: 'LUNCH'
-          });
-
-          io.emit('agent-status-update', {
-            agentId: agentId.toString(),
-            status: 'ONLINE',
-            pauseReason: 'LUNCH'
-          });
-        } else {
-          socket.emit('agent-status-update', {
-            status: statusInfo.status,
-            pauseReason: statusInfo.pauseReason,
-          });
+        if (isNaN(agentId)) {
+          throw new Error('Invalid agent ID');
         }
-        
-        // Send initial metrics
-        const metrics = await getAgentMetrics(agentId);
-        socket.emit('metrics-update', metrics);
 
-        // Set up periodic metrics updates
+        socket.join(`agent-${agentId}`);
+        console.log(`Agent ${agentId} joined their room`);
+
+        // Start sending metrics updates
         const metricsInterval = setInterval(async () => {
-          const updatedMetrics = await getAgentMetrics(agentId);
-          socket.emit('metrics-update', updatedMetrics);
-        }, 30000);
+          const metrics = await getAgentMetrics(agentId);
+          socket.emit('metrics-update', metrics);
+        }, 5000);
 
         socket.on('disconnect', () => {
           clearInterval(metricsInterval);
           
-          StatusService.updateAgentStatus(agentId.toString(), {
-            status: 'OFFLINE',
-            pauseReason: 'LUNCH'
+          // Update agent status to OFFLINE on disconnect
+          prisma.user.update({
+            where: { id: agentId.toString() },
+            data: { status: 'OFFLINE' }
           }).then(() => {
             io.emit('agent-status-update', {
               agentId: agentId.toString(),
-              status: 'OFFLINE',
-              pauseReason: 'LUNCH'
+              status: 'OFFLINE'
             });
           }).catch(error => {
             console.error('Error updating agent status on disconnect:', error);
@@ -125,9 +99,43 @@ app.prepare().then(() => {
           return;
         }
 
-        await StatusService.updateAgentStatus(agentId.toString(), {
-          status: data.status,
-          pauseReason: data.pauseReason
+        // Update agent status in database
+        const [user, statusInfo] = await prisma.$transaction([
+          prisma.user.update({
+            where: { id: agentId.toString() },
+            data: { status: data.status },
+          }),
+          prisma.agentStatusInfo.upsert({
+            where: { userId: agentId.toString() },
+            update: {
+              status: data.status,
+              pauseReason: data.status === "PAUSED" ? data.pauseReason : null,
+              lastActive: new Date(),
+            },
+            create: {
+              userId: agentId.toString(),
+              status: data.status,
+              pauseReason: data.status === "PAUSED" ? data.pauseReason : null,
+            },
+          }),
+          prisma.agentStatusHistory.create({
+            data: {
+              userId: agentId.toString(),
+              status: data.status,
+              pauseReason: data.status === "PAUSED" ? data.pauseReason : null,
+            },
+          }),
+        ]);
+
+        // Log the status change
+        await prisma.userActivityLog.create({
+          data: {
+            userId: agentId.toString(),
+            action: "STATUS_CHANGE",
+            details: `Status changed to ${data.status}${data.pauseReason ? ` (${data.pauseReason})` : ""}`,
+            ipAddress: "SERVER",
+            userAgent: "SERVER"
+          }
         });
 
         io.emit('agent-status-update', {

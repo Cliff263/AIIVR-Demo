@@ -27,9 +27,14 @@ export default function SignIn() {
         return;
       }
 
-      router.push("/");
+      // Redirect based on user role
+      if (result.user?.role === "SUPERVISOR") {
+        router.push("/dashboard/supervisor");
+      } else {
+        router.push("/dashboard/agent");
+      }
       router.refresh();
-    } catch {
+    } catch (error) {
       setError("An error occurred. Please try again.");
     } finally {
       setIsPending(false);
