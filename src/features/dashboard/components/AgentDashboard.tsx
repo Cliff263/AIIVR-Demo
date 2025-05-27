@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AgentStatus } from "@/features/agent";
-import { AgentStatusToggle } from "@/features/agent";
 import { CallMetrics } from "@/features/calls";
 import { useSocket } from "@/hooks/useSocket";
 import { Call, AgentStatus as AgentStatusType } from "@prisma/client";
@@ -22,9 +20,8 @@ interface AgentDashboardProps {
 export default function AgentDashboard({
   agentData,
 }: AgentDashboardProps) {
-  const userId = parseInt(agentData.id, 10);
+  const userId = agentData.id;
   const { socket } = useSocket(userId, 'AGENT');
-  const [status, setStatus] = useState<AgentStatusType>(agentData.status || "OFFLINE");
   const [metrics, setMetrics] = useState({
     totalCalls: 0,
     averageHandleTime: 0,
@@ -35,9 +32,7 @@ export default function AgentDashboard({
     if (!socket) return;
 
     // Listen for live agent status updates
-    const handleStatusUpdate = (data: { status: AgentStatusType }) => {
-      setStatus(data.status);
-    };
+    const handleStatusUpdate = () => {};
     socket.on("agent-status-update", handleStatusUpdate);
 
     socket.on("call-started", () => {
@@ -75,19 +70,8 @@ export default function AgentDashboard({
         <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-rose-600">
           Welcome back, {agentData.name}
         </h2>
-        <AgentStatusToggle status={status} setStatus={setStatus} socket={socket} />
       </div>
-
       <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-        <Card className="border-rose-100 shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="bg-rose-50/50 border-b border-rose-100">
-            <CardTitle className="text-xl font-semibold text-rose-600">Your Status</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6">
-            <AgentStatus status={status} socket={socket} />
-          </CardContent>
-        </Card>
-
         <Card className="border-rose-100 shadow-md hover:shadow-lg transition-shadow md:col-span-2 xl:col-span-2">
           <CardHeader className="bg-rose-50/50 border-b border-rose-100">
             <CardTitle className="text-xl font-semibold text-rose-600">Call Metrics</CardTitle>

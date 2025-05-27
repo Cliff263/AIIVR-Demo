@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AgentStatus } from "@/features/agent";
 import { CallMetrics } from "@/features/calls";
 import { useSocket } from "@/hooks/useSocket";
-import { useAuth } from "@/hooks/useAuth";
-import { Call, AgentStatus as AgentStatusType } from "@prisma/client";
+import { AgentStatus as AgentStatusType } from "@prisma/client";
 
 interface SupervisorDashboardProps {
   supervisorData: {
@@ -27,8 +25,7 @@ interface SupervisorDashboardProps {
 export default function SupervisorDashboard({
   supervisorData,
 }: SupervisorDashboardProps) {
-  const { user } = useAuth();
-  const userId = parseInt(supervisorData.id, 10);
+  const userId = supervisorData.id;
   const { socket } = useSocket(userId, 'SUPERVISOR');
   const [metrics, setMetrics] = useState({
     totalCalls: 0,
@@ -99,7 +96,7 @@ export default function SupervisorDashboard({
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                     agent.status === 'ONLINE' ? 'bg-success-100 text-success-800' :
-                    agent.status === 'BUSY' ? 'bg-warning-100 text-warning-800' :
+                    agent.status === 'PAUSED' ? 'bg-warning-100 text-warning-800' :
                     'bg-rose-100 text-rose-800'
                   }`}>
                     {agent.status}

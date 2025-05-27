@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
   const socketRef = useRef<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     // Only attempt to connect and join rooms if a valid userId is provided
@@ -13,6 +14,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      setIsConnected(false);
       return;
     }
 
@@ -39,6 +41,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
     // Connection event handlers
     socket.on('connect', () => {
       console.log('WebSocket connected successfully');
+      setIsConnected(true);
        // Join appropriate room based on role after successful connection
       if (role === 'AGENT') {
         socket.emit('join-agent-room', userId);
@@ -49,14 +52,16 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
 
     socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
+      setIsConnected(false);
     });
 
     socket.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
 
-    socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
+    socket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+      setIsConnected(false);
     });
 
     socket.on('reconnect_attempt', (attemptNumber) => {
@@ -65,6 +70,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
 
     socket.on('reconnect', (attemptNumber) => {
       console.log(`WebSocket reconnected after ${attemptNumber} attempts`);
+      setIsConnected(true);
     });
 
     socket.on('reconnect_error', (error) => {
@@ -73,6 +79,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
 
     socket.on('reconnect_failed', () => {
       console.error('WebSocket reconnection failed');
+      setIsConnected(false);
     });
 
     socketRef.current = socket;
@@ -83,6 +90,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
         console.log('Disconnecting WebSocket...');
         socketRef.current.disconnect();
         socketRef.current = null;
+        setIsConnected(false);
       }
     };
   }, [userId, role]); // Re-run effect if userId or role changes
@@ -119,6 +127,7 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
 
   return {
     socket: socketRef.current,
+    isConnected,
     emitStatusChange,
     emitCallUpdate,
     emitQueryUpdate,

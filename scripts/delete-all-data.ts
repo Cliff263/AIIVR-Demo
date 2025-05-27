@@ -15,6 +15,7 @@ async function deleteAllData() {
       prisma.query.deleteMany(),
       prisma.session.deleteMany(),
       prisma.supervisorKey.deleteMany(),
+      prisma.userActivityLog.deleteMany(),
       prisma.user.deleteMany(),
     ]);
 

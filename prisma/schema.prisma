@@ -112,12 +112,12 @@ model User {
   supervisorId String?
   agents       User[]        @relation("SupervisorToAgent")
   supervisorKey SupervisorKey?
-  statusInfo   AgentStatusInfo?
   queries      Query[]       @relation("AssignedQueries")
   performance  PerformanceMetrics[]
-  statusHistory AgentStatusHistory[]
   qualityEvaluations CallQuality[] @relation("QualityEvaluator")
   activityLogs UserActivityLog[]
+  statusInfo   AgentStatusInfo?
+  statusHistory AgentStatusHistory[]
 }
 
 model Session {
@@ -161,25 +161,6 @@ model Recording {
   uploader      User            @relation(fields: [uploadedBy], references: [id])
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
-}
-
-model AgentStatusInfo {
-  id          Int         @id @default(autoincrement())
-  userId      String      @unique
-  user        User        @relation(fields: [userId], references: [id])
-  status      AgentStatus @default(OFFLINE)
-  pauseReason PauseReason?
-  lastActive  DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-}
-
-model AgentStatusHistory {
-  id          Int         @id @default(autoincrement())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  status      AgentStatus
-  pauseReason PauseReason?
-  timestamp   DateTime    @default(now())
 }
 
 model Query {
@@ -230,4 +211,24 @@ model SupervisorKey {
   used      Boolean  @default(false)
   usedBy    User?    @relation(fields: [usedById], references: [id])
   usedById  String?  @unique
+}
+
+model AgentStatusInfo {
+  id          String      @id @default(cuid())
+  userId      String      @unique
+  user        User        @relation(fields: [userId], references: [id])
+  status      AgentStatus @default(OFFLINE)
+  pauseReason PauseReason?
+  lastActive  DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model AgentStatusHistory {
+  id          Int         @id @default(autoincrement())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  status      AgentStatus
+  pauseReason PauseReason?
+  createdAt   DateTime    @default(now())
 }

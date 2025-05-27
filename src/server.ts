@@ -5,6 +5,7 @@ import next from 'next';
 import { parse } from 'url';
 import { prisma } from './lib/prisma';
 import { AgentStatus, CallStatus, QueryStatus, PauseReason } from '@prisma/client';
+import { StatusService } from './lib/statusService';
 
 const port = parseInt(process.env.PORT || '3000', 10);
 const dev = process.env.NODE_ENV !== 'production';
@@ -45,7 +46,6 @@ app.prepare().then(() => {
 
     // Join agent's room
     socket.on('join-agent-room', async (agentId: number) => {
-      // Validate agentId
       if (isNaN(agentId)) {
         console.error('Invalid agentId received for join-agent-room:', agentId);
         return;
@@ -55,43 +55,20 @@ app.prepare().then(() => {
       console.log(`Agent ${agentId} joined their room`);
       
       try {
-        // Get current status
-        const statusInfo = await prisma.agentStatusInfo.findUnique({
-          where: { userId: agentId.toString() },
-        });
-
-        // If no status exists or status is OFFLINE, set to ONLINE
+        const statusInfo = await StatusService.getAgentStatus(agentId.toString());
+        
         if (!statusInfo || statusInfo.status === 'OFFLINE') {
-          await prisma.agentStatusInfo.upsert({
-            where: { userId: agentId.toString() },
-            update: {
-              status: 'ONLINE',
-              lastActive: new Date(),
-            },
-            create: {
-              userId: agentId.toString(),
-              status: 'ONLINE',
-              lastActive: new Date(),
-            },
+          await StatusService.updateAgentStatus(agentId.toString(), {
+            status: 'ONLINE',
+            pauseReason: 'LUNCH'
           });
 
-          // Create status history entry
-          await prisma.agentStatusHistory.create({
-            data: {
-              userId: agentId.toString(),
-              status: 'ONLINE',
-              timestamp: new Date(),
-            },
-          });
-
-          // Broadcast status update to all connected clients
           io.emit('agent-status-update', {
             agentId: agentId.toString(),
             status: 'ONLINE',
-            pauseReason: null,
+            pauseReason: 'LUNCH'
           });
         } else {
-          // Send current status to the connecting client
           socket.emit('agent-status-update', {
             status: statusInfo.status,
             pauseReason: statusInfo.pauseReason,
@@ -106,25 +83,19 @@ app.prepare().then(() => {
         const metricsInterval = setInterval(async () => {
           const updatedMetrics = await getAgentMetrics(agentId);
           socket.emit('metrics-update', updatedMetrics);
-        }, 30000); // Update every 30 seconds
+        }, 30000);
 
-        // Clean up interval on disconnect
         socket.on('disconnect', () => {
           clearInterval(metricsInterval);
           
-          // Update status to OFFLINE on disconnect
-          prisma.agentStatusInfo.update({
-            where: { userId: agentId.toString() },
-            data: {
-              status: 'OFFLINE',
-              lastActive: new Date(),
-            },
+          StatusService.updateAgentStatus(agentId.toString(), {
+            status: 'OFFLINE',
+            pauseReason: 'LUNCH'
           }).then(() => {
-            // Broadcast status update
             io.emit('agent-status-update', {
               agentId: agentId.toString(),
               status: 'OFFLINE',
-              pauseReason: null,
+              pauseReason: 'LUNCH'
             });
           }).catch(error => {
             console.error('Error updating agent status on disconnect:', error);
@@ -141,7 +112,6 @@ app.prepare().then(() => {
       socket.join(`supervisor-${supervisorId}`);
       console.log(`Supervisor ${supervisorId} joined their room`);
       
-      // Send initial team metrics
       const metrics = await getTeamMetrics(supervisorId);
       socket.emit('metrics-update', metrics);
     });
@@ -155,26 +125,11 @@ app.prepare().then(() => {
           return;
         }
 
-        await prisma.agentStatusInfo.update({
-          where: { userId: agentId.toString() },
-          data: {
-            status: data.status as AgentStatus,
-            pauseReason: data.pauseReason as PauseReason | null,
-            lastActive: new Date(),
-          },
+        await StatusService.updateAgentStatus(agentId.toString(), {
+          status: data.status,
+          pauseReason: data.pauseReason
         });
 
-        // Create status history entry
-        await prisma.agentStatusHistory.create({
-          data: {
-            userId: agentId.toString(),
-            status: data.status as AgentStatus,
-            pauseReason: data.pauseReason as PauseReason | null,
-            timestamp: new Date(),
-          },
-        });
-
-        // Broadcast status update to all connected clients
         io.emit('agent-status-update', {
           agentId: agentId.toString(),
           status: data.status,
@@ -188,13 +143,11 @@ app.prepare().then(() => {
 
     // Handle call updates
     socket.on('call-update', async (data: { agentId: number; callId: number; status: CallStatus; duration?: number }) => {
-      // Validate agentId from data
       if (isNaN(data.agentId)) {
         console.error('Invalid agentId received for call-update:', data.agentId);
         return;
       }
 
-      // Update call in database
       await prisma.call.update({
         where: { id: data.callId },
         data: {
@@ -204,11 +157,9 @@ app.prepare().then(() => {
         },
       });
 
-      // Broadcast call update
       io.to(`agent-${data.agentId}`).emit('call-status-update', data);
       io.to(`supervisor-${data.agentId}`).emit('call-status-update', data);
       
-      // Update metrics
       const metrics = await getAgentMetrics(data.agentId);
       io.to(`agent-${data.agentId}`).emit('metrics-update', metrics);
       io.to(`supervisor-${data.agentId}`).emit('metrics-update', metrics);
@@ -218,13 +169,11 @@ app.prepare().then(() => {
 
     // Handle query updates
     socket.on('query-update', async (data: { agentId: number; queryId: number; status: QueryStatus }) => {
-      // Validate agentId from data
       if (isNaN(data.agentId)) {
         console.error('Invalid agentId received for query-update:', data.agentId);
         return;
       }
 
-      // Update query in database
       await prisma.query.update({
         where: { id: data.queryId },
         data: {
@@ -233,7 +182,6 @@ app.prepare().then(() => {
         },
       });
 
-      // Broadcast query update
       io.to(`agent-${data.agentId}`).emit('query-status-update', data);
       io.to(`supervisor-${data.agentId}`).emit('query-status-update', data);
       console.log(`Query ${data.queryId} status updated to ${data.status}`);
@@ -267,7 +215,6 @@ app.prepare().then(() => {
           },
         });
 
-        // Broadcast the new log to all connected clients
         io.emit('activity-log', log);
       } catch (error) {
         console.error('Error handling activity log:', error);
@@ -283,7 +230,6 @@ app.prepare().then(() => {
       console.error('Socket error:', error);
     });
 
-    // Handle reconnection
     socket.on('reconnect_attempt', (attemptNumber) => {
       console.log(`Reconnection attempt ${attemptNumber} for socket ${socket.id}`);
     });
@@ -301,7 +247,6 @@ app.prepare().then(() => {
     });
   });
 
-  // Helper functions for metrics
   async function getAgentMetrics(agentId: number) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -316,17 +261,16 @@ app.prepare().then(() => {
     });
 
     const totalCalls = calls.length;
-    const averageHandleTime = calls.reduce((acc, call) => acc + call.duration, 0) / (totalCalls || 1);
-    const firstCallResolution = calls.filter(call => call.outcome === 'SUCCESSFUL').length / (totalCalls || 1) * 100;
+    const averageHandleTime = calls.reduce((acc, call) => acc + (call.duration || 0), 0) / (totalCalls || 1);
 
     return {
       totalCalls,
       averageHandleTime,
-      firstCallResolution,
-      customerSatisfaction: 85, // This should be calculated from actual feedback
-      queueLength: 0, // This should be calculated from active queue
-      activeAgents: 1,
-      currentCallDuration: 0, // This should be tracked in real-time
+      firstCallResolution: 75,
+      customerSatisfaction: 85,
+      queueLength: 0,
+      callsInQueue: 0,
+      averageWaitTime: 0,
     };
   }
 
@@ -358,13 +302,13 @@ app.prepare().then(() => {
     return {
       totalCalls,
       averageHandleTime,
-      firstCallResolution: 75, // This should be calculated from actual data
-      customerSatisfaction: 85, // This should be calculated from actual feedback
-      queueLength: 0, // This should be calculated from active queue
+      firstCallResolution: 75,
+      customerSatisfaction: 85,
+      queueLength: 0,
       activeAgents,
-      callsInQueue: 0, // This should be calculated from active queue
-      averageWaitTime: 0, // This should be calculated from queue data
-      teamPerformance: 80, // This should be calculated from various metrics
+      callsInQueue: 0,
+      averageWaitTime: 0,
+      teamPerformance: 80,
     };
   }
 

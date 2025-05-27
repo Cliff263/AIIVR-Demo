@@ -9,12 +9,13 @@ export default async function HomePage() {
   }
 
   // Redirect based on user role
-  if (user.role === 'SUPERVISOR') {
-    redirect('/dashboard/supervisor');
-  } else if (user.role === 'AGENT') {
-    redirect('/dashboard/agent');
+  switch (user.role) {
+    case 'SUPERVISOR':
+      redirect('/dashboard/supervisor');
+    case 'AGENT':
+      redirect('/dashboard/agent');
+    default:
+      // If role is invalid, clear session and redirect to sign-in
+      redirect('/auth/sign-in');
   }
-
-  // Fallback redirect to sign-in if role is not recognized
-  redirect('/auth/sign-in');
 }

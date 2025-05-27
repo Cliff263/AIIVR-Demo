@@ -29,6 +29,19 @@ CREATE TYPE "QueryPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
 CREATE TYPE "RecordingStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- CreateTable
+CREATE TABLE "UserActivityLog" (
+    "id" SERIAL NOT NULL,
+    "userId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "details" TEXT,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserActivityLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -89,29 +102,6 @@ CREATE TABLE "Recording" (
 );
 
 -- CreateTable
-CREATE TABLE "AgentStatusInfo" (
-    "id" SERIAL NOT NULL,
-    "userId" TEXT NOT NULL,
-    "status" "AgentStatus" NOT NULL DEFAULT 'OFFLINE',
-    "pauseReason" "PauseReason",
-    "lastActive" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "AgentStatusInfo_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "AgentStatusHistory" (
-    "id" SERIAL NOT NULL,
-    "userId" TEXT NOT NULL,
-    "status" "AgentStatus" NOT NULL,
-    "pauseReason" "PauseReason",
-    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "AgentStatusHistory_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "Query" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
@@ -168,6 +158,30 @@ CREATE TABLE "SupervisorKey" (
 );
 
 -- CreateTable
+CREATE TABLE "AgentStatusInfo" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "status" "AgentStatus" NOT NULL DEFAULT 'OFFLINE',
+    "pauseReason" "PauseReason",
+    "lastActive" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AgentStatusInfo_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AgentStatusHistory" (
+    "id" SERIAL NOT NULL,
+    "userId" TEXT NOT NULL,
+    "status" "AgentStatus" NOT NULL,
+    "pauseReason" "PauseReason",
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AgentStatusHistory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_QueryCalls" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -185,9 +199,6 @@ CREATE UNIQUE INDEX "Recording_url_key" ON "Recording"("url");
 CREATE UNIQUE INDEX "Recording_callId_key" ON "Recording"("callId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AgentStatusInfo_userId_key" ON "AgentStatusInfo"("userId");
-
--- CreateIndex
 CREATE UNIQUE INDEX "CallQuality_callId_key" ON "CallQuality"("callId");
 
 -- CreateIndex
@@ -197,7 +208,13 @@ CREATE UNIQUE INDEX "SupervisorKey_key_key" ON "SupervisorKey"("key");
 CREATE UNIQUE INDEX "SupervisorKey_usedById_key" ON "SupervisorKey"("usedById");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "AgentStatusInfo_userId_key" ON "AgentStatusInfo"("userId");
+
+-- CreateIndex
 CREATE INDEX "_QueryCalls_B_index" ON "_QueryCalls"("B");
+
+-- AddForeignKey
+ALTER TABLE "UserActivityLog" ADD CONSTRAINT "UserActivityLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_supervisorId_fkey" FOREIGN KEY ("supervisorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -215,12 +232,6 @@ ALTER TABLE "Recording" ADD CONSTRAINT "Recording_callId_fkey" FOREIGN KEY ("cal
 ALTER TABLE "Recording" ADD CONSTRAINT "Recording_uploadedBy_fkey" FOREIGN KEY ("uploadedBy") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AgentStatusInfo" ADD CONSTRAINT "AgentStatusInfo_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "AgentStatusHistory" ADD CONSTRAINT "AgentStatusHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "Query" ADD CONSTRAINT "Query_assignedTo_fkey" FOREIGN KEY ("assignedTo") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -234,6 +245,12 @@ ALTER TABLE "PerformanceMetrics" ADD CONSTRAINT "PerformanceMetrics_userId_fkey"
 
 -- AddForeignKey
 ALTER TABLE "SupervisorKey" ADD CONSTRAINT "SupervisorKey_usedById_fkey" FOREIGN KEY ("usedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AgentStatusInfo" ADD CONSTRAINT "AgentStatusInfo_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AgentStatusHistory" ADD CONSTRAINT "AgentStatusHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_QueryCalls" ADD CONSTRAINT "_QueryCalls_A_fkey" FOREIGN KEY ("A") REFERENCES "Call"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
 	const session = request.cookies.get("session");
 	const isAuthPage = request.nextUrl.pathname.startsWith('/auth/');
 	const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
-	const isPublicRoute = request.nextUrl.pathname === '/';
+	const isRootPath = request.nextUrl.pathname === '/';
 
 	// Allow API routes to handle their own authentication
 	if (isApiRoute) {
@@ -17,28 +17,14 @@ export function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL('/', request.url));
 	}
 
-	// If trying to access protected pages while logged out, redirect to sign in
-	if (!isAuthPage && !isPublicRoute && !session) {
+	// If trying to access any page while logged out, redirect to sign in
+	if (!isAuthPage && !session) {
 		return NextResponse.redirect(new URL('/auth/sign-in', request.url));
 	}
 
-	// CSRF Protection for non-GET requests
-	if (request.method !== "GET") {
-		const originHeader = request.headers.get("Origin");
-		const hostHeader = request.headers.get("Host");
-		
-		if (!originHeader || !hostHeader) {
-			return new NextResponse(null, { status: 403 });
-		}
-
-		try {
-			const origin = new URL(originHeader);
-			if (origin.host !== hostHeader) {
-				return new NextResponse(null, { status: 403 });
-			}
-		} catch {
-			return new NextResponse(null, { status: 403 });
-		}
+	// If accessing root path with session, let the page handle the role-based redirect
+	if (isRootPath && session) {
+		return NextResponse.next();
 	}
 
 	return NextResponse.next();

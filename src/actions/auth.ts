@@ -2,11 +2,11 @@
 import prisma from "@/lib/prisma";
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from "@oslojs/encoding";
 import { sha256 } from "@oslojs/crypto/sha2";
-import type { User, Session, UserRole } from "@prisma/client";
+import type { User, Session, PauseReason } from "@prisma/client";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { compare, hash } from "bcryptjs";
-import { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
+//import { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 
 export async function generateSessionToken(): Promise<string> {
 	const bytes = new Uint8Array(20);
@@ -181,6 +181,10 @@ export const updateAgentStatus = async (
 	pauseReason?: string
 ) => {
 	try {
+		if (status === "PAUSED" && !pauseReason) {
+			throw new Error("Pause reason is required when status is PAUSED");
+		}
+
 		const [user, statusInfo] = await prisma.$transaction([
 			prisma.user.update({
 				where: { id: userId },
@@ -190,20 +194,20 @@ export const updateAgentStatus = async (
 				where: { userId },
 				update: {
 					status,
-					pauseReason: pauseReason as any,
+					pauseReason: status === "PAUSED" ? (pauseReason as PauseReason) : null,
 					lastActive: new Date(),
 				},
 				create: {
 					userId,
 					status,
-					pauseReason: pauseReason as any,
+					pauseReason: status === "PAUSED" ? (pauseReason as PauseReason) : null,
 				},
 			}),
 			prisma.agentStatusHistory.create({
 				data: {
 					userId,
 					status,
-					pauseReason: pauseReason as any,
+					pauseReason: status === "PAUSED" ? (pauseReason as PauseReason) : null,
 				},
 			}),
 		]);
@@ -315,4 +319,3 @@ export const signOut = async () => {
 		console.error("Sign out error:", error);
 	}
 };
-

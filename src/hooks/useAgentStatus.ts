@@ -2,79 +2,84 @@
 
 import { useState, useEffect } from "react";
 import { useSocket } from "./useSocket";
+import { AgentStatus, PauseReason } from "@prisma/client";
+import { StatusService } from "@/lib/statusService";
 
-export type AgentStatus = "ONLINE" | "PAUSED" | "OFFLINE";
-
-interface UseAgentStatusReturn {
+export type UseAgentStatusReturn = {
   status: AgentStatus;
-  pauseReason: string | null;
+  pauseReason: PauseReason | null;
   isLoading: boolean;
-  error: any;
-  updateStatus: (newStatus: AgentStatus, pauseReason?: string) => void;
+  error: Error | null;
+  updateStatus: (status: AgentStatus, pauseReason?: PauseReason) => Promise<void>;
   isConnected: boolean;
-}
+};
 
-export function useAgentStatus(): UseAgentStatusReturn {
+export function useAgentStatus(userId: string): UseAgentStatusReturn {
   const [status, setStatus] = useState<AgentStatus>("OFFLINE");
-  const [pauseReason, setPauseReason] = useState<string | null>(null);
+  const [pauseReason, setPauseReason] = useState<PauseReason | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<any>(null);
-  const { socket, emitStatusChange } = useSocket();
+  const [error, setError] = useState<Error | null>(null);
+  const { socket, isConnected } = useSocket(parseInt(userId), 'AGENT');
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        setIsLoading(true);
+        const statusInfo = await StatusService.getAgentStatus(userId);
+        if (statusInfo) {
+          setStatus(statusInfo.status);
+          setPauseReason(statusInfo.pauseReason);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch status'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStatus();
+  }, [userId]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleStatusUpdate = (data: { status: AgentStatus; pauseReason?: string }) => {
+    const handleStatusUpdate = (data: { status: AgentStatus; pauseReason?: PauseReason }) => {
       setStatus(data.status);
-      setPauseReason(data.pauseReason || null);
+      if (data.pauseReason) {
+        setPauseReason(data.pauseReason);
+      }
     };
 
-    socket.on("agent-status-update", handleStatusUpdate);
-
-    // Set initial status to ONLINE when component mounts
-    if (status === "OFFLINE") {
-      emitStatusChange("ONLINE");
-    }
+    socket.on('agent-status-update', handleStatusUpdate);
 
     return () => {
-      socket.off("agent-status-update", handleStatusUpdate);
+      socket.off('agent-status-update', handleStatusUpdate);
     };
-  }, [socket, status, emitStatusChange]);
+  }, [socket]);
 
-  const updateStatus = async (newStatus: AgentStatus, newPauseReason?: string) => {
+  const updateStatus = async (newStatus: AgentStatus, newPauseReason?: PauseReason) => {
+    if (!socket || !isConnected) {
+      throw new Error('Socket not connected');
+    }
+
     try {
-      setIsLoading(true);
-      setError(null);
-
-      // Update local state immediately for better UX
-      setStatus(newStatus);
-      setPauseReason(newPauseReason || null);
-
-      // Emit status change to server
-      emitStatusChange(newStatus, newPauseReason);
-
-      // Update status in database
-      const response = await fetch("/api/agent/status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          pauseReason: newPauseReason,
-        }),
+      await StatusService.updateAgentStatus(userId, {
+        status: newStatus,
+        pauseReason: newPauseReason
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update status");
+      socket.emit('status-change', {
+        status: newStatus,
+        pauseReason: newPauseReason
+      });
+
+      setStatus(newStatus);
+      if (newPauseReason) {
+        setPauseReason(newPauseReason);
       }
     } catch (err) {
-      setError(err);
-      // Revert local state on error
-      setStatus(status);
-      setPauseReason(pauseReason);
-    } finally {
-      setIsLoading(false);
+      setError(err instanceof Error ? err : new Error('Failed to update status'));
+      throw err;
     }
   };
 
@@ -84,6 +89,6 @@ export function useAgentStatus(): UseAgentStatusReturn {
     isLoading,
     error,
     updateStatus,
-    isConnected: !!socket,
+    isConnected,
   };
 } 

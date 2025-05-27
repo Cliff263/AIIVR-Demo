@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { signOut } from "@/actions/auth";
-import { AgentStatus as AgentStatusType, UserRole, PauseReason } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { useSocket } from '@/hooks/useSocket';
 import { useRouter } from "next/navigation";
+import { toast } from 'sonner';
 
 interface NavbarProps {
   user: {
@@ -13,14 +14,14 @@ interface NavbarProps {
     name: string;
     role: UserRole;
     status: {
-      status: AgentStatusType;
-      pauseReason?: string | null;
+      status: UserStatus;
+      lastActive: Date;
     } | null;
   };
 }
 
 // Status colors
-const getStatusColor = (status: AgentStatusType) => {
+const getStatusColor = (status: UserStatus) => {
   switch (status) {
     case 'ONLINE':
       return 'bg-success-500';
@@ -32,7 +33,7 @@ const getStatusColor = (status: AgentStatusType) => {
   }
 };
 
-const getStatusTextColor = (status: AgentStatusType) => {
+const getStatusTextColor = (status: UserStatus) => {
   switch (status) {
     case 'ONLINE':
       return 'text-success-700';
@@ -44,7 +45,7 @@ const getStatusTextColor = (status: AgentStatusType) => {
   }
 };
 
-const getStatusBgColor = (status: AgentStatusType) => {
+const getStatusBgColor = (status: UserStatus) => {
   switch (status) {
     case 'ONLINE':
       return 'bg-success-50 hover:bg-success-100';
@@ -56,86 +57,82 @@ const getStatusBgColor = (status: AgentStatusType) => {
   }
 };
 
-// Pause reasons (must match Prisma enum PauseReason)
-const pauseReasons = [
-  { value: PauseReason.LUNCH, label: 'Lunch' },
-  { value: PauseReason.BATHROOM, label: 'Bathroom' },
-  { value: PauseReason.SMOKE, label: 'Smoke' },
-  { value: PauseReason.ON_LEAVE, label: 'On Leave' },
-  { value: PauseReason.CASE_WORK, label: 'Case Work' },
-  // Add other reasons from schema if needed
-];
-
 export default function Navbar({ user }: NavbarProps) {
   const router = useRouter();
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
-  const [status, setStatus] = useState<AgentStatusType>(user.status?.status || 'OFFLINE');
-  const [pauseReason, setPauseReason] = useState<string | null>(user.status?.pauseReason || null);
-  const userId = parseInt(user.id, 10);
+  const [status, setStatus] = useState<UserStatus>(user.status?.status || 'OFFLINE');
   
-  // Derive userId and role, ensuring they are valid before useSocket
-  const userRoleDerived = user?.role || 'AGENT'; // Default role if user is null/undefined, adjust as needed
-
-  // useSocket hook is called unconditionally, but handles invalid userId internally
-  const { socket, emitStatusChange } = useSocket(userId, userRoleDerived);
+  const { socket, isConnected, emitStatusChange } = useSocket(user.id, user.role);
 
   // Handle initial status - only emit if socket is connected and user is an agent
   useEffect(() => {
-    if (user?.role === 'AGENT' && status === 'OFFLINE' && socket && socket.connected && userId > 0) {
+    if (user?.role === 'AGENT' && status === 'OFFLINE' && isConnected) {
       emitStatusChange('ONLINE');
     }
-  }, [user?.role, status, emitStatusChange, socket, userId]); // Added userId to dependency array
+  }, [user?.role, status, emitStatusChange, isConnected]);
 
-  // Handle socket updates - only listen if socket is available
+  // Handle socket updates
   useEffect(() => {
     if (!socket) return;
 
-    const handleStatusUpdate = (data: { status: AgentStatusType; pauseReason?: string }) => {
+    const handleStatusUpdate = (data: { status: UserStatus; lastActive: Date }) => {
       console.log('Navbar received status update:', data);
       setStatus(data.status);
-      setPauseReason(data.pauseReason || null);
+    };
+
+    const handleStatusChangeConfirmation = (data: { 
+      status: UserStatus;
+      timestamp: Date;
+      lastActive: Date;
+    }) => {
+      toast.success('Status updated', {
+        description: `Status changed to ${data.status}`,
+      });
     };
 
     // Listen for status updates
     socket.on('agent-status-update', handleStatusUpdate);
+    socket.on('status-change-confirmation', handleStatusChangeConfirmation);
 
     return () => {
       socket.off('agent-status-update', handleStatusUpdate);
+      socket.off('status-change-confirmation', handleStatusChangeConfirmation);
     };
   }, [socket]);
 
-  const updateStatus = (newStatus: AgentStatusType, reason?: string) => {
-     // Only attempt to emit if socket is connected and userId is valid
-    if (socket && socket.connected && userId > 0) {
-      console.log('Navbar updating status:', { newStatus, reason });
-      emitStatusChange(newStatus, reason);
+  const updateStatus = (newStatus: UserStatus) => {
+    if (isConnected) {
+      emitStatusChange(newStatus);
       setStatus(newStatus);
-      setPauseReason(reason || null);
       setIsStatusMenuOpen(false);
       setIsPauseModalOpen(false);
     } else {
-      console.warn('Navbar: Socket not connected or userId invalid, cannot update status.');
+      toast.error('Connection error', {
+        description: 'Cannot update status while disconnected',
+      });
     }
   };
 
   const handleSignOut = async () => {
-     // Only attempt to sign out if user is available
-    if(user) {
-       await signOut();
-       router.push('/auth/sign-in');
-    } else {
-      console.warn('Navbar: User not available, cannot sign out.');
+    try {
+      await signOut();
+      router.push('/auth/sign-in');
+    } catch (err) {
+      console.error('Sign out failed:', err);
+      toast.error('Sign out failed', {
+        description: 'Please try again',
+      });
     }
   };
 
   // Only render the full navbar if user data is available
   if (!user) {
-     return (
+    return (
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-soft">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-             {/* Logo and App Name */}
+            {/* Logo and App Name */}
             <div className="flex items-center">
               <Link href="/" className="flex items-center gap-3 group">
                 <span className="text-xl font-bold text-rose-600">
@@ -162,7 +159,7 @@ export default function Navbar({ user }: NavbarProps) {
           </div>
 
           <div className="flex items-center gap-4">
-            {user.role === 'AGENT' && userId > 0 && (
+            {user.role === 'AGENT' && (
               <div className="relative">
                 <button
                   onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
@@ -171,7 +168,6 @@ export default function Navbar({ user }: NavbarProps) {
                   <div className={`h-2.5 w-2.5 rounded-full ${getStatusColor(status)}`} />
                   <span className={`text-sm font-semibold ${getStatusTextColor(status)}`}>
                     {status}
-                    {pauseReason && ` (${pauseReason})`}
                   </span>
                 </button>
 
@@ -231,29 +227,13 @@ export default function Navbar({ user }: NavbarProps) {
         </div>
       </div>
 
-      {/* Pause Reason Modal (Navbar) */}
+      {/* Pause Reason Modal */}
       {isPauseModalOpen && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-96 shadow-soft">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Pause Reason</h3>
             <div className="space-y-2">
-              {pauseReasons.map((reason) => (
-                <button
-                  key={reason.value}
-                  onClick={() => updateStatus('PAUSED', reason.value)}
-                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-rose-50 hover:text-rose-600 rounded-md text-left transition-colors"
-                >
-                  {reason.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setIsPauseModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-rose-50 hover:text-rose-600 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
+              {/* Remove pause reasons section */}
             </div>
           </div>
         </div>

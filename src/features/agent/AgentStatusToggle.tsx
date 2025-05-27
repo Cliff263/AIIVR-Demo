@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Icons } from "@/components/ui/icons";
 import { AgentStatus } from "@prisma/client";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 interface AgentStatusToggleProps {
   status: AgentStatus;
@@ -24,39 +25,43 @@ interface AgentStatusToggleProps {
 
 export default function AgentStatusToggle({ status, setStatus, socket }: AgentStatusToggleProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [notes, setNotes] = useState("");
+  const [pauseReason, setPauseReason] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<AgentStatus | null>(null);
 
-  const handleStatusChange = async (newStatus: AgentStatus) => {
-    if (!socket) return;
+  const pauseOptions = [
+    "Lunch",
+    "Bathroom",
+    "Smoke",
+    "On Leave",
+    "Case Work",
+  ];
 
+  const handleStatusChange = async () => {
+    if (!socket || !pendingStatus) return;
     setIsLoading(true);
     try {
-      // Update status in database
       const response = await fetch("/api/agent/status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          status: newStatus,
-          pauseReason: notes,
+          status: pendingStatus,
+          pauseReason: pendingStatus === "PAUSED" ? pauseReason : undefined,
         }),
       });
-
       if (!response.ok) {
         throw new Error("Failed to update status");
       }
-
-      // Emit status change to server
-      socket.emit("agent:updateStatus", {
-        status: newStatus,
-        notes,
+      socket.emit("status-change", {
+        status: pendingStatus,
+        pauseReason: pendingStatus === "PAUSED" ? pauseReason : undefined,
       });
-
-      setStatus(newStatus);
+      setStatus(pendingStatus);
       setIsOpen(false);
-      setNotes("");
+      setPauseReason("");
+      setPendingStatus(null);
     } catch (error) {
       console.error("Failed to update status:", error);
     } finally {
@@ -65,57 +70,83 @@ export default function AgentStatusToggle({ status, setStatus, socket }: AgentSt
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full font-semibold border-2 border-rose-600 text-rose-700 hover:bg-rose-50 focus:ring-rose-600">
-          <Icons.refresh className="mr-2 h-4 w-4" />
-          Update Status
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Update Agent Status</DialogTitle>
-          <DialogDescription>
-            Change your current status and add any relevant notes.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              variant={status === "ONLINE" ? "default" : "outline"}
-              onClick={() => handleStatusChange("ONLINE")}
-              disabled={isLoading}
-              className={status === "ONLINE" ? "bg-rose-600 hover:bg-rose-700" : ""}
-            >
-              <Icons.online className="mr-2 h-4 w-4" />
-              Online
-            </Button>
-            <Button
-              variant={status === "PAUSED" ? "default" : "outline"}
-              onClick={() => handleStatusChange("PAUSED")}
-              disabled={isLoading}
-              className={status === "PAUSED" ? "bg-rose-600 hover:bg-rose-700" : ""}
-            >
-              <Icons.paused className="mr-2 h-4 w-4" />
-              Paused
-            </Button>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any relevant notes about your status..."
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
-            Cancel
+    <div className="flex justify-end w-full">
+      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); setPendingStatus(null); setPauseReason(""); }}>
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="font-semibold border-2 border-rose-600 text-rose-700 hover:bg-rose-50 focus:ring-rose-600 w-auto min-w-[120px]"
+          >
+            <Icons.refresh className="mr-2 h-4 w-4" />
+            Update Status
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Agent Status</DialogTitle>
+            <DialogDescription>
+              Change your current status and add any relevant notes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Button
+                variant={pendingStatus === "ONLINE" ? "default" : "outline"}
+                onClick={() => { setPendingStatus("ONLINE"); setPauseReason(""); }}
+                disabled={isLoading}
+                className={
+                  (pendingStatus === "ONLINE" ? "bg-green-600 hover:bg-green-700 text-white" : "") +
+                  " flex-1"
+                }
+              >
+                <Icons.online className="mr-2 h-4 w-4" />
+                Online
+              </Button>
+              <Button
+                variant={pendingStatus === "PAUSED" ? "default" : "outline"}
+                onClick={() => setPendingStatus("PAUSED")}
+                disabled={isLoading}
+                className={
+                  (pendingStatus === "PAUSED" ? "bg-red-600 hover:bg-red-700 text-white" : "") +
+                  " flex-1"
+                }
+              >
+                <Icons.paused className="mr-2 h-4 w-4" />
+                Paused
+              </Button>
+            </div>
+            {pendingStatus === "PAUSED" && (
+              <div className="grid gap-2">
+                <Label htmlFor="pause-reason">Pause Reason</Label>
+                <Select value={pauseReason} onValueChange={setPauseReason}>
+                  <SelectTrigger id="pause-reason" className="w-full">
+                    <SelectValue placeholder="Select a reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pauseOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="default"
+              onClick={handleStatusChange}
+              disabled={isLoading || (pendingStatus === "PAUSED" && !pauseReason) || !pendingStatus}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isLoading ? "Updating..." : "Confirm"}
+            </Button>
+            <Button variant="outline" onClick={() => setIsOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 } 
