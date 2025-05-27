@@ -2,44 +2,63 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { emitActivityLog } from "@/lib/websocket";
+import { auth } from '@/lib/auth'
 
 const ITEMS_PER_PAGE = 10;
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
-    
-    if (!user || user.role !== "SUPERVISOR") {
-      return new NextResponse("Unauthorized", { status: 401 });
+    const session = await auth()
+    if (!session) {
+      return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const search = searchParams.get("search") || "";
-    const action = searchParams.get("action") || "";
-    const role = searchParams.get("role") || "";
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const search = searchParams.get('search')
+    const action = searchParams.get('action')
+    const role = searchParams.get('role')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
 
-    const where = {
-      AND: [
-        search ? {
-          OR: [
-            { user: { name: { contains: search, mode: "insensitive" } } },
-            { user: { email: { contains: search, mode: "insensitive" } } },
-            { details: { contains: search, mode: "insensitive" } },
-          ],
-        } : {},
-        action ? { action } : {},
-        role ? { user: { role } } : {},
-        startDate ? { createdAt: { gte: new Date(startDate) } } : {},
-        endDate ? { createdAt: { lte: new Date(endDate) } } : {},
-      ],
-    };
+    // Build the where clause for the query
+    const where: any = {}
+    
+    if (search) {
+      where.OR = [
+        { details: { contains: search, mode: 'insensitive' } },
+        { user: { name: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } }
+      ]
+    }
 
-    const [logs, totalItems] = await Promise.all([
+    if (action) {
+      where.action = action
+    }
+
+    if (role) {
+      where.user = { role }
+    }
+
+    if (startDate || endDate) {
+      where.timestamp = {}
+      if (startDate) {
+        where.timestamp.gte = new Date(startDate)
+      }
+      if (endDate) {
+        where.timestamp.lte = new Date(endDate)
+      }
+    }
+
+    // Fetch logs from the database with pagination
+    const [logs, total] = await Promise.all([
       prisma.userActivityLog.findMany({
         where,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip: (page - 1) * ITEMS_PER_PAGE,
+        take: ITEMS_PER_PAGE,
         include: {
           user: {
             select: {
@@ -49,26 +68,31 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: {
-          createdAt: "desc",
-        },
-        skip: (page - 1) * ITEMS_PER_PAGE,
-        take: ITEMS_PER_PAGE,
       }),
-      prisma.userActivityLog.count({ where }),
-    ]);
+      prisma.userActivityLog.count({ where })
+    ])
 
-    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    // Transform the logs to match the expected format
+    const formattedLogs = logs.map((log) => ({
+      id: log.id,
+      createdAt: log.createdAt.toISOString(),
+      action: log.action,
+      details: log.details,
+      ipAddress: log.ipAddress,
+      user: {
+        name: log.user.name,
+        email: log.user.email,
+        role: log.user.role,
+      },
+    }))
 
-    return NextResponse.json({
-      logs,
-      totalPages,
-      currentPage: page,
-      totalItems,
-    });
+    return NextResponse.json({ 
+      logs: formattedLogs,
+      totalPages: Math.ceil(total / ITEMS_PER_PAGE)
+    })
   } catch (error) {
-    console.error("Failed to fetch activity logs:", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    console.error('Error fetching activity logs:', error)
+    return new NextResponse('Internal Server Error', { status: 500 })
   }
 }
 

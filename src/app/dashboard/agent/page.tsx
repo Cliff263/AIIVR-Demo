@@ -2,6 +2,7 @@ import { getCurrentSession } from "@/actions/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import AgentDashboard from "@/features/dashboard/components/AgentDashboard";
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default async function AgentDashboardPage() {
   const { user } = await getCurrentSession();
@@ -26,5 +27,9 @@ export default async function AgentDashboardPage() {
     redirect('/auth/sign-in');
   }
 
-  return <AgentDashboard agentData={agentData} />;
+  return (
+    <DashboardLayout user={{ ...user, status: agentData.statusInfo }}>
+      <AgentDashboard agentData={agentData} />
+    </DashboardLayout>
+  );
 } 

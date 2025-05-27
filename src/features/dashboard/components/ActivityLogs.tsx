@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,15 +27,26 @@ const ACTIONS = [
   "PERMISSION_CHANGE",
 ] as const;
 
-// Add prop interface for ActivityLogs
+interface ActivityLog {
+  id: string;
+  createdAt: string;
+  action: string;
+  details: string;
+  ipAddress: string;
+  user: {
+    name: string;
+    email: string;
+    role: string;
+  };
+}
+
 interface ActivityLogsProps {
   userId: number;
   role: 'AGENT' | 'SUPERVISOR';
 }
 
-// Update function signature to accept props
 export function ActivityLogs({ userId, role }: ActivityLogsProps) {
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,7 +58,7 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
   const [endDate, setEndDate] = useState<Date | undefined>();
   const { socket } = useSocket(userId, role);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
@@ -60,16 +71,20 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
       });
 
       const response = await fetch(`/api/activity-logs?${params}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to fetch logs');
+      }
       const data = await response.json();
       setLogs(data.logs);
       setTotalPages(data.totalPages);
     } catch (error) {
       console.error("Failed to fetch logs:", error);
-      toast.error("Failed to fetch logs");
+      toast.error(error instanceof Error ? error.message : "Failed to fetch logs");
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, selectedAction, selectedRole, startDate, endDate]);
 
   const handleExport = async (fileFormat: "csv" | "json") => {
     try {
@@ -106,12 +121,12 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
       interval = setInterval(fetchLogs, 30000);
     }
     return () => clearInterval(interval);
-  }, [page, search, selectedAction, selectedRole, startDate, endDate, autoRefresh]);
+  }, [fetchLogs, autoRefresh]);
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewLog = (log: any) => {
+    const handleNewLog = (log: ActivityLog) => {
       setLogs((prevLogs) => [log, ...prevLogs].slice(0, 10));
     };
 
@@ -150,27 +165,27 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
   };
 
   return (
-    <Card className="border-rose-100">
+    <Card className="border-blue-100">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-rose-600">Activity Logs</CardTitle>
+          <CardTitle className="text-blue-600">Activity Logs</CardTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleExport("csv")}
-              className="flex items-center gap-2 border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              className="flex items-center gap-2 text-black border-blue-200 hover:bg-blue-50 hover:text-blue-600"
             >
-              <FileText className="h-4 w-4" />
+              <FileText className=" h-4 w-4" />
               Export CSV
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleExport("json")}
-              className="flex items-center gap-2 border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              className="flex items-center text-black gap-2 border-blue-200 hover:bg-blue-50 hover:text-blue-600"
             >
-              <FileJson className="h-4 w-4" />
+              <FileJson className=" h-4 w-4" />
               Export JSON
             </Button>
           </div>
@@ -178,48 +193,53 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-4">
+          {/* Filter and Search Bar */}
+          <div className="flex flex-wrap gap-4 items-center justify-between">
             <Input
               placeholder="Search logs..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-xs border-rose-200 focus:border-rose-300 focus:ring-rose-300"
+              className="flex-1 min-w-[200px] border-blue-200 focus:border-blue-300 focus:ring-blue-300 text-gray-900 placeholder-gray-500"
             />
-            <Select value={selectedAction === '' ? 'all' : selectedAction} onValueChange={v => setSelectedAction(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[180px] border-rose-200 focus:border-rose-300 focus:ring-rose-300">
-                <SelectValue placeholder="Filter by action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                {ACTIONS.map((action) => (
-                  <SelectItem key={action} value={action}>
-                    {action}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={selectedRole === '' ? 'all' : selectedRole} onValueChange={v => setSelectedRole(v === 'all' ? '' : v)}>
-              <SelectTrigger className="w-[180px] border-rose-200 focus:border-rose-300 focus:ring-rose-300">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="AGENT">Agent</SelectItem>
-                <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2">
+
+            {/* Filter Options */}
+            <div className="flex flex-wrap gap-4 items-center">
+              <Select value={selectedAction === '' ? 'all' : selectedAction} onValueChange={v => setSelectedAction(v === 'all' ? '' : v)}>
+                <SelectTrigger className="w-[180px] border-blue-200 focus:border-blue-300 focus:ring-blue-300 text-gray-900">
+                  <SelectValue placeholder="Filter by action" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Actions</SelectItem>
+                  {ACTIONS.map((action) => (
+                    <SelectItem key={action} value={action}>
+                      {action}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedRole === '' ? 'all' : selectedRole} onValueChange={v => setSelectedRole(v === 'all' ? '' : v)}>
+                <SelectTrigger className="w-[180px] border-blue-200 focus:border-blue-300 focus:ring-blue-300 text-gray-900">
+                  <SelectValue placeholder="Filter by role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="AGENT">Agent</SelectItem>
+                  <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
+                </SelectContent>
+              </Select>
+
               <RadixPopover.Root>
                 <RadixPopover.Trigger asChild>
                   <Button
                     variant="outline"
-                    className="w-[240px] justify-start text-left font-normal border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                    className="w-[240px] justify-start text-left font-normal border-blue-200 hover:bg-blue-50 hover:text-blue-600 text-gray-900"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {startDate ? format(startDate, "PPP") : "Start date"}
                   </Button>
                 </RadixPopover.Trigger>
-                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-rose-200">
+                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-blue-200">
                   <DayPicker
                     mode="single"
                     selected={startDate}
@@ -228,17 +248,18 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                   />
                 </RadixPopover.Content>
               </RadixPopover.Root>
+
               <RadixPopover.Root>
                 <RadixPopover.Trigger asChild>
                   <Button
                     variant="outline"
-                    className="w-[240px] justify-start text-left font-normal border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                    className="w-[240px] justify-start text-left font-normal border-blue-200 hover:bg-blue-50 hover:text-blue-600 text-gray-900"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {endDate ? format(endDate, "PPP") : "End date"}
                   </Button>
                 </RadixPopover.Trigger>
-                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-rose-200">
+                <RadixPopover.Content className="w-auto p-0 bg-white rounded shadow-lg border border-blue-200">
                   <DayPicker
                     mode="single"
                     selected={endDate}
@@ -247,62 +268,77 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                   />
                 </RadixPopover.Content>
               </RadixPopover.Root>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className="border-blue-200 hover:bg-blue-50 hover:text-blue-600 text-gray-900"
+              >
+                {autoRefresh ? "Disable Auto-refresh" : "Enable Auto-refresh"}
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className="border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-            >
-              {autoRefresh ? "Disable Auto-refresh" : "Enable Auto-refresh"}
-            </Button>
           </div>
 
-          <div className="rounded-md border border-rose-200">
+          <div className="rounded-md border border-blue-200">
             <div className="relative w-full overflow-auto">
               <table className="w-full caption-bottom text-sm">
-                <thead className="[&_tr]:border-b border-rose-200">
-                  <tr className="border-b transition-colors hover:bg-rose-50/50 data-[state=selected]:bg-rose-50">
-                    <th className="h-12 px-4 text-left align-middle font-medium text-rose-900">Time</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-rose-900">User</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-rose-900">Action</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-rose-900">Details</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-rose-900">IP Address</th>
+                <thead className="[&_tr]:border-b border-blue-200">
+                  <tr className="border-b transition-colors hover:bg-blue-50/50 data-[state=selected]:bg-blue-50">
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Time</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">User</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Action</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Details</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">IP Address</th>
                   </tr>
                 </thead>
                 <tbody className="[&_tr:last-child]:border-0">
-                  {logs.map((log) => (
-                    <tr
-                      key={log.id}
-                      className="border-b border-rose-100 transition-colors hover:bg-rose-50/50 data-[state=selected]:bg-rose-50"
-                    >
-                      <td className="p-4 align-middle text-gray-900">
-                        {format(new Date(log.createdAt), "MMM d, yyyy HH:mm:ss")}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-gray-500">
+                        Loading...
                       </td>
-                      <td className="p-4 align-middle">
-                        <div>
-                          <div className="font-medium text-gray-900">{log.user.name}</div>
-                          <div className="text-sm text-rose-600">
-                            {log.user.email}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <Badge className={getActionColor(log.action)}>
-                          {log.action}
-                        </Badge>
-                      </td>
-                      <td className="p-4 align-middle text-gray-900">{log.details}</td>
-                      <td className="p-4 align-middle text-gray-900">{log.ipAddress}</td>
                     </tr>
-                  ))}
+                  ) : logs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-gray-500">
+                        No logs found
+                      </td>
+                    </tr>
+                  ) : (
+                    logs.map((log) => (
+                      <tr
+                        key={log.id}
+                        className="border-b border-blue-100 transition-colors hover:bg-blue-50/50 data-[state=selected]:bg-blue-50"
+                      >
+                        <td className="p-4 align-middle text-gray-900">
+                          {format(new Date(log.createdAt), "MMM d, yyyy HH:mm:ss")}
+                        </td>
+                        <td className="p-4 align-middle">
+                          <div>
+                            <div className="font-medium text-gray-900">{log.user.name}</div>
+                            <div className="text-sm text-blue-600">
+                              {log.user.email}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 align-middle">
+                          <Badge className={getActionColor(log.action)}>
+                            {log.action}
+                          </Badge>
+                        </td>
+                        <td className="p-4 align-middle text-gray-900">{log.details}</td>
+                        <td className="p-4 align-middle text-gray-900">{log.ipAddress}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="text-sm text-rose-600">
+            <div className="text-sm text-blue-600">
               Page {page} of {totalPages}
             </div>
             <div className="flex items-center space-x-2">
@@ -311,7 +347,7 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                 size="sm"
                 onClick={() => setPage(page - 1)}
                 disabled={page === 1}
-                className="border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                className="border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50 text-gray-900"
               >
                 Previous
               </Button>
@@ -320,7 +356,7 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                 size="sm"
                 onClick={() => setPage(page + 1)}
                 disabled={page === totalPages}
-                className="border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                className="border-blue-200 hover:bg-blue-50 hover:hover:text-blue-600 disabled:opacity-50 text-gray-900"
               >
                 Next
               </Button>

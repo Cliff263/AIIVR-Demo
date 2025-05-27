@@ -2,6 +2,7 @@ import { getCurrentSession } from "@/actions/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import SupervisorDashboard from "@/features/dashboard/components/SupervisorDashboard";
+import DashboardLayout from '@/components/DashboardLayout';
 
 export default async function SupervisorDashboardPage() {
   const { user } = await getCurrentSession();
@@ -32,5 +33,9 @@ export default async function SupervisorDashboardPage() {
     redirect('/auth/sign-in');
   }
 
-  return <SupervisorDashboard supervisorData={supervisorData} />;
+  return (
+    <DashboardLayout user={{ ...user, status: supervisorData.statusInfo }}>
+      <SupervisorDashboard supervisorData={supervisorData} />
+    </DashboardLayout>
+  );
 } 

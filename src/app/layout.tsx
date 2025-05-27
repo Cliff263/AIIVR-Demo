@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { getCurrentSession } from "@/actions/auth";
-import Navbar from "@/components/Navbar";
+import Sidebar from "@/components/Sidebar";
+import Topbar from "@/components/Topbar";
 import { prisma } from "@/lib/prisma";
 import type { UserStatus } from "@prisma/client";
 
@@ -27,7 +28,7 @@ export default async function RootLayout({
       where: { id: user.id }
     });
 
-    // Transform user data to match Navbar component's expected type
+    // Transform user data to match Sidebar component's expected type
     transformedUser = {
       id: user.id,
       name: user.name,
@@ -42,9 +43,16 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} bg-gray-50`}>
-        {transformedUser && <Navbar user={transformedUser} />}
-        <main className={transformedUser ? "pt-16 min-h-screen" : "min-h-screen"}>
-          {children}
+        {transformedUser && (
+          <>
+            <Sidebar />
+            <Topbar user={transformedUser} />
+          </>
+        )}
+        <main className={transformedUser ? "ml-64 pt-16 min-h-screen" : "min-h-screen"}>
+          <div className="container mx-auto px-6 py-8">
+            {children}
+          </div>
         </main>
       </body>
     </html>
