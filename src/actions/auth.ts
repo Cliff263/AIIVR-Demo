@@ -17,164 +17,52 @@ export async function generateSessionToken(): Promise<string> {
 
 export async function createSession(token: string, userId: string): Promise<Session> {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-	const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
-	return prisma.session.create({
-		data: {
-			id: sessionId,
-			userId,
-			expiresAt,
-		},
-	});
-}
-
-export async function setSessionTokenCookie(token: string, expiresAt: Date) {
-	const cookieStore = await cookies();
-	const cookie: ResponseCookie = {
-		name: "session",
-		value: token,
-		path: "/",
-		expires: expiresAt,
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "lax",
+	const session: Session = {
+		id: sessionId,
+		userId,
+		expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30)
 	};
-	cookieStore.set(cookie);
+	await prisma.session.create({
+		data: session
+	});
+	return session;
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-	return compare(password, hash);
-}
-
-export type SessionValidationResult =
-	| { session: Session; user: Omit<User, "passwordHash"> }
-	| { session: null; user: null };
-
-export const getCurrentSession = cache(async (): Promise<SessionValidationResult> => {
-	const cookieStore = await cookies();
-	const token = cookieStore.get("session")?.value ?? null;
-	if (token === null) {
+export async function validateSessionToken(token: string): Promise<SessionValidationResult> {
+	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	const result = await prisma.session.findUnique({
+		where: {
+			id: sessionId
+		},
+		include: {
+			user: true
+		}
+	});
+	if (result === null) {
 		return { session: null, user: null };
 	}
-
-	try {
-		const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-		const result = await prisma.session.findUnique({
+	const { user, ...session } = result;
+	if (Date.now() >= session.expiresAt.getTime()) {
+		await prisma.session.delete({ where: { id: sessionId } });
+		return { session: null, user: null };
+	}
+	if (Date.now() >= session.expiresAt.getTime() - 1000 * 60 * 60 * 24 * 15) {
+		session.expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
+		await prisma.session.update({
 			where: {
-				id: sessionId
+				id: session.id
 			},
-			include: {
-				user: true
+			data: {
+				expiresAt: session.expiresAt
 			}
 		});
-
-		if (result === null) {
-			return { session: null, user: null };
-		}
-
-		const { user, ...session } = result;
-		if (Date.now() >= session.expiresAt.getTime()) {
-			await prisma.session.delete({ where: { id: sessionId } });
-			return { session: null, user: null };
-		}
-
-		if (Date.now() >= session.expiresAt.getTime() - 1000 * 60 * 60 * 24 * 15) {
-			session.expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-			await prisma.session.update({
-				where: {
-					id: session.id
-				},
-				data: {
-					expiresAt: session.expiresAt
-				}
-			});
-		}
-
-		const safeUser = {
-			...user,
-			passwordHash: undefined,
-		};
-
-		return { session, user: safeUser };
-	} catch (error) {
-		console.error('Session validation error:', error);
-		return { session: null, user: null };
 	}
-});
-
-export const signIn = async (email: string, password: string) => {
-	try {
-		const user = await prisma.user.findUnique({
-			where: {
-				email: email
-			}
-		});
-		
-		if (!user) {
-			return {
-				user: null,
-				error: "No user found"
-			};
-		}
-
-		const isPasswordValid = await verifyPassword(password, user.passwordHash);
-		if (!isPasswordValid) {
-			return {
-				user: null,
-				error: "Invalid password"
-			};
-		}
-
-		const token = await generateSessionToken();
-		const session = await createSession(token, user.id);
-		await setSessionTokenCookie(token, session.expiresAt);
-		
-		// Update both user status and agent status to ONLINE
-		await prisma.$transaction([
-			// Update user status
-			prisma.user.update({
-				where: { id: user.id },
-				data: { status: 'ONLINE' }
-			}),
-			// Update agent status info
-			prisma.agentStatusInfo.upsert({
-				where: {
-					userId: user.id,
-				},
-				update: {
-					status: 'ONLINE',
-					lastActive: new Date(),
-				},
-				create: {
-					userId: user.id,
-					status: 'ONLINE',
-				},
-			}),
-			// Create status history entry
-			prisma.agentStatusHistory.create({
-				data: {
-					userId: user.id,
-					status: 'ONLINE',
-				},
-			})
-		]);
-		
-		const safeUser = { 
-			...user, 
-			passwordHash: undefined 
-		};
-		
-		return {
-			user: safeUser,
-			error: null
-		};
-	} catch (error) {
-		console.error('Sign in error:', error);
-		return {
-			user: null,
-			error: "An error occurred during sign in"
-		};
+	const safeUser = {
+		...user,
+		passwordHash: undefined,
 	}
-};
+	return { session, user: safeUser };
+}
 
 export async function invalidateSession(sessionId: string): Promise<void> {
 	await prisma.session.delete({ where: { id: sessionId } });
@@ -188,26 +76,76 @@ export async function invalidateAllSessions(userId: string): Promise<void> {
 	});
 }
 
-{/* User register, signin, signout */}
+export type SessionValidationResult =
+	| { session: Session; user: Omit<User, "passwordHash"> }
+	| { session: null; user: null };
+
+export async function setSessionTokenCookie(token: string, expiresAt: Date): Promise<void> {
+	const cookieStore = await cookies();
+	cookieStore.set("session", token, {
+		httpOnly: true,
+		sameSite: "lax",
+		secure: process.env.NODE_ENV === "production",
+		expires: expiresAt,
+		path: "/"
+	});
+}
+
+export async function deleteSessionTokenCookie(): Promise<void> {
+	const cookieStore = await cookies();
+	cookieStore.set("session", "", {
+		httpOnly: true,
+		sameSite: "lax",
+		secure: process.env.NODE_ENV === "production",
+		maxAge: 0,
+		path: "/"
+	});
+}
+
+export const getCurrentSession = cache(async (): Promise<SessionValidationResult> => {
+	const cookieStore = await cookies();
+	const token = cookieStore.get("session")?.value ?? null;
+	if (token === null) {
+		return { session: null, user: null };
+	}
+	const result = await validateSessionToken(token);
+	return result;
+});
+
 export const hashPassword = async (password: string) => {
-	return hash(password, 10); // 10 is the salt rounds
+	return hash(password, 10);
 };
 
-export const registerUser = async (email: string, password: string, name: string, role: UserRole = "AGENT") => {
+export const verifyPassword = async (password: string, hash: string) => {
+	return compare(password, hash);
+};
+
+export const registerUser = async (name: string, email: string, password: string, supervisorKey?: string) => {
 	const passwordHash = await hashPassword(password);
 	try {
 		const user = await prisma.user.create({
 			data: {
+				name,
 				email,
 				passwordHash,
-				name,
-				role,
+				role: supervisorKey === process.env.SUPERVISOR_KEY ? "SUPERVISOR" : "AGENT"
 			}
 		});
+
+		await prisma.userActivityLog.create({
+			data: {
+				userId: user.id,
+				action: "REGISTER",
+				details: `User registered with role: ${user.role}`,
+				ipAddress: "SERVER",
+				userAgent: "SERVER"
+			}
+		});
+
 		const safeUser = { ...user, passwordHash: undefined };
 		return { user: safeUser, error: null };
 	} catch (error) {
-		console.error('Registration error:', error);
+		console.error("Registration error:", error);
 		return {
 			user: null,
 			error: "Failed to create user"
@@ -215,62 +153,166 @@ export const registerUser = async (email: string, password: string, name: string
 	}
 };
 
-export const signOut = async () => {
+export const logActivity = async (
+	userId: string,
+	action: string,
+	details?: string,
+	ipAddress?: string,
+	userAgent?: string
+) => {
 	try {
-		const cookieStore = await cookies();
-		const token = cookieStore.get("session")?.value;
-		
-		if (token) {
-			const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-			const session = await prisma.session.findUnique({
-				where: { id: sessionId },
-				include: { user: true }
-			});
+		await prisma.userActivityLog.create({
+			data: {
+				userId,
+				action,
+				details,
+				ipAddress,
+				userAgent,
+			},
+		});
+	} catch (error) {
+		console.error("Failed to log activity:", error);
+	}
+};
 
-			if (session?.user) {
-				// Update user status to OFFLINE
-				await prisma.agentStatusInfo.upsert({
-					where: {
-						userId: session.user.id,
-					},
-					update: {
-						status: 'OFFLINE',
-						lastActive: new Date(),
-					},
-					create: {
-						userId: session.user.id,
-						status: 'OFFLINE',
-					},
-				});
+export const updateAgentStatus = async (
+	userId: string,
+	status: "ONLINE" | "OFFLINE" | "PAUSED",
+	pauseReason?: string
+) => {
+	try {
+		const [user, statusInfo] = await prisma.$transaction([
+			prisma.user.update({
+				where: { id: userId },
+				data: { status },
+			}),
+			prisma.agentStatusInfo.upsert({
+				where: { userId },
+				update: {
+					status,
+					pauseReason: pauseReason as any,
+					lastActive: new Date(),
+				},
+				create: {
+					userId,
+					status,
+					pauseReason: pauseReason as any,
+				},
+			}),
+			prisma.agentStatusHistory.create({
+				data: {
+					userId,
+					status,
+					pauseReason: pauseReason as any,
+				},
+			}),
+		]);
 
-				// Create status history entry
-				await prisma.agentStatusHistory.create({
-					data: {
-						userId: session.user.id,
-						status: 'OFFLINE',
-					},
-				});
+		await logActivity(
+			userId,
+			"STATUS_CHANGE",
+			`Status changed to ${status}${pauseReason ? ` (${pauseReason})` : ""}`
+		);
+
+		return { user, statusInfo };
+	} catch (error) {
+		console.error("Failed to update agent status:", error);
+		throw error;
+	}
+};
+
+export const logCallActivity = async (
+	userId: string,
+	callId: number,
+	action: "CALL_STARTED" | "CALL_ENDED",
+	details?: string
+) => {
+	try {
+		await logActivity(
+			userId,
+			action,
+			`Call ID: ${callId}${details ? ` - ${details}` : ""}`
+		);
+	} catch (error) {
+		console.error("Failed to log call activity:", error);
+	}
+};
+
+export const signIn = async (email: string, password: string) => {
+	try {
+		const user = await prisma.user.findUnique({
+			where: {
+				email: email
 			}
+		});
 
-			await invalidateSession(sessionId);
+		if (!user) {
+			return {
+				user: null,
+				error: "No user found"
+			};
 		}
 
-		// Clear the session cookie with proper expiration
-		const cookie: ResponseCookie = {
-			name: "session",
-			value: "",
-			path: "/",
-			expires: new Date(0), // Set to past date to expire immediately
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "lax",
+		const isPasswordValid = await verifyPassword(password, user.passwordHash);
+		if (!isPasswordValid) {
+			await logActivity(
+				user.id,
+				"LOGIN_FAILED",
+				"Invalid password"
+			);
+
+			return {
+				user: null,
+				error: "Invalid password"
+			};
+		}
+
+		const token = await generateSessionToken();
+		const session = await createSession(token, user.id);
+		await setSessionTokenCookie(token, session.expiresAt);
+
+		await logActivity(
+			user.id,
+			"LOGIN",
+			"User logged in successfully"
+		);
+
+		await updateAgentStatus(user.id, "ONLINE");
+
+		const safeUser = {
+			...user,
+			passwordHash: undefined
 		};
-		cookieStore.set(cookie);
-		
-		return { success: true };
+
+		return {
+			user: safeUser,
+			error: null
+		};
 	} catch (error) {
-		console.error('Sign out error:', error);
-		return { success: false, error: "Failed to sign out" };
+		console.error("Sign in error:", error);
+		return {
+			user: null,
+			error: "An error occurred during sign in"
+		};
+	}
+};
+
+export const signOut = async () => {
+	try {
+		const session = await getCurrentSession();
+		if (session.session && session.user) {
+			await logActivity(
+				session.user.id,
+				"LOGOUT",
+				"User logged out"
+			);
+
+			await updateAgentStatus(session.user.id, "OFFLINE");
+			await invalidateSession(session.session.id);
+		}
+		await deleteSessionTokenCookie();
+	} catch (error) {
+		console.error("Sign out error:", error);
 	}
 };
 

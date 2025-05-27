@@ -44,9 +44,9 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.className} bg-gray-50`}>
         {transformedUser && <Navbar user={transformedUser} />}
-        <main className={transformedUser ? "pt-16" : ""}>
+        <main className={transformedUser ? "pt-16 min-h-screen" : "min-h-screen"}>
           {children}
         </main>
       </body>

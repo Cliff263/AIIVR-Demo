@@ -48,56 +48,92 @@ app.prepare().then(() => {
       // Validate agentId
       if (isNaN(agentId)) {
         console.error('Invalid agentId received for join-agent-room:', agentId);
-        // Optionally, disconnect the socket or send an error back to the client
         return;
       }
 
       socket.join(`agent-${agentId}`);
       console.log(`Agent ${agentId} joined their room`);
       
-      // Get current status
-      const statusInfo = await prisma.agentStatusInfo.findUnique({
-        where: { userId: agentId.toString() },
-      });
-
-      // If no status exists or status is OFFLINE, set to ONLINE
-      if (!statusInfo || statusInfo.status === 'OFFLINE') {
-        const updatedStatus = await prisma.agentStatusInfo.upsert({
+      try {
+        // Get current status
+        const statusInfo = await prisma.agentStatusInfo.findUnique({
           where: { userId: agentId.toString() },
-          update: {
-            status: 'ONLINE',
-            lastActive: new Date(),
-          },
-          create: {
-            userId: agentId.toString(),
-            status: 'ONLINE',
-          },
         });
 
-        // Create status history entry
-        await prisma.agentStatusHistory.create({
-          data: {
-            userId: agentId.toString(),
-            status: 'ONLINE',
-          },
-        });
+        // If no status exists or status is OFFLINE, set to ONLINE
+        if (!statusInfo || statusInfo.status === 'OFFLINE') {
+          await prisma.agentStatusInfo.upsert({
+            where: { userId: agentId.toString() },
+            update: {
+              status: 'ONLINE',
+              lastActive: new Date(),
+            },
+            create: {
+              userId: agentId.toString(),
+              status: 'ONLINE',
+              lastActive: new Date(),
+            },
+          });
 
-        // Broadcast status update
-        io.to(`agent-${agentId}`).emit('agent-status-update', {
-          status: 'ONLINE',
-          pauseReason: null,
+          // Create status history entry
+          await prisma.agentStatusHistory.create({
+            data: {
+              userId: agentId.toString(),
+              status: 'ONLINE',
+              timestamp: new Date(),
+            },
+          });
+
+          // Broadcast status update to all connected clients
+          io.emit('agent-status-update', {
+            agentId: agentId.toString(),
+            status: 'ONLINE',
+            pauseReason: null,
+          });
+        } else {
+          // Send current status to the connecting client
+          socket.emit('agent-status-update', {
+            status: statusInfo.status,
+            pauseReason: statusInfo.pauseReason,
+          });
+        }
+        
+        // Send initial metrics
+        const metrics = await getAgentMetrics(agentId);
+        socket.emit('metrics-update', metrics);
+
+        // Set up periodic metrics updates
+        const metricsInterval = setInterval(async () => {
+          const updatedMetrics = await getAgentMetrics(agentId);
+          socket.emit('metrics-update', updatedMetrics);
+        }, 30000); // Update every 30 seconds
+
+        // Clean up interval on disconnect
+        socket.on('disconnect', () => {
+          clearInterval(metricsInterval);
+          
+          // Update status to OFFLINE on disconnect
+          prisma.agentStatusInfo.update({
+            where: { userId: agentId.toString() },
+            data: {
+              status: 'OFFLINE',
+              lastActive: new Date(),
+            },
+          }).then(() => {
+            // Broadcast status update
+            io.emit('agent-status-update', {
+              agentId: agentId.toString(),
+              status: 'OFFLINE',
+              pauseReason: null,
+            });
+          }).catch(error => {
+            console.error('Error updating agent status on disconnect:', error);
+          });
         });
-      } else {
-        // Send current status
-        socket.emit('agent-status-update', {
-          status: statusInfo.status,
-          pauseReason: statusInfo.pauseReason,
-        });
+      } catch (error) {
+        console.error('Error handling agent room join:', error);
+        socket.emit('error', { message: 'Failed to join agent room' });
       }
-      
-      // Send initial metrics
-      const metrics = await getAgentMetrics(agentId);
-      socket.emit('metrics-update', metrics);
     });
 
     // Join supervisor's room
@@ -110,69 +146,44 @@ app.prepare().then(() => {
       socket.emit('metrics-update', metrics);
     });
 
-    // Handle agent status changes
-    socket.on('agent-status-change', async (data: { agentId: number; status: AgentStatus; pauseReason?: PauseReason }) => {
-      // Validate agentId from data
-      if (isNaN(data.agentId)) {
-        console.error('Invalid agentId received for agent-status-change:', data.agentId);
-        return;
-      }
+    // Handle status changes
+    socket.on('status-change', async (data: { status: AgentStatus; pauseReason?: PauseReason }) => {
+      try {
+        const agentId = socket.handshake.auth.agentId;
+        if (!agentId) {
+          console.error('No agentId provided for status change');
+          return;
+        }
 
-      // Check if the user exists
-      const userExists = await prisma.user.count({
-        where: { id: data.agentId.toString() },
-      });
-
-      if (userExists === 0) {
-        console.error('User not found for agent-status-change with agentId:', data.agentId);
-        return;
-      }
-
-      // Update status in database
-      await prisma.agentStatusInfo.upsert({
-        where: { userId: data.agentId.toString() },
-        update: {
-          status: data.status,
-          pauseReason: data.pauseReason,
-          lastActive: new Date(),
-        },
-        create: {
-          userId: data.agentId.toString(),
-          status: data.status,
-          pauseReason: data.pauseReason,
-        },
-      });
-
-      // Create status history entry
-      await prisma.agentStatusHistory.create({
-        data: {
-          userId: data.agentId.toString(),
-          status: data.status,
-          pauseReason: data.pauseReason,
-        },
-      });
-
-      // Broadcast status update to all relevant rooms
-      io.to(`agent-${data.agentId}`).emit('agent-status-update', {
-        status: data.status,
-        pauseReason: data.pauseReason !== undefined ? data.pauseReason : null,
-      });
-      
-      // If agent has a supervisor, notify them
-      const agent = await prisma.user.findUnique({
-        where: { id: data.agentId.toString() },
-        select: { supervisorId: true },
-      });
-
-      if (agent?.supervisorId) {
-        io.to(`supervisor-${agent.supervisorId}`).emit('agent-status-update', {
-          agentId: data.agentId,
-          status: data.status,
-          pauseReason: data.pauseReason !== undefined ? data.pauseReason : null,
+        await prisma.agentStatusInfo.update({
+          where: { userId: agentId.toString() },
+          data: {
+            status: data.status as AgentStatus,
+            pauseReason: data.pauseReason as PauseReason | null,
+            lastActive: new Date(),
+          },
         });
-      }
 
-      console.log(`Agent ${data.agentId} status changed to ${data.status}`);
+        // Create status history entry
+        await prisma.agentStatusHistory.create({
+          data: {
+            userId: agentId.toString(),
+            status: data.status as AgentStatus,
+            pauseReason: data.pauseReason as PauseReason | null,
+            timestamp: new Date(),
+          },
+        });
+
+        // Broadcast status update to all connected clients
+        io.emit('agent-status-update', {
+          agentId: agentId.toString(),
+          status: data.status,
+          pauseReason: data.pauseReason,
+        });
+      } catch (error) {
+        console.error('Error handling status change:', error);
+        socket.emit('error', { message: 'Failed to update status' });
+      }
     });
 
     // Handle call updates
@@ -226,6 +237,42 @@ app.prepare().then(() => {
       io.to(`agent-${data.agentId}`).emit('query-status-update', data);
       io.to(`supervisor-${data.agentId}`).emit('query-status-update', data);
       console.log(`Query ${data.queryId} status updated to ${data.status}`);
+    });
+
+    // Handle activity log
+    socket.on('activity-log', async (data: { 
+      userId: string;
+      action: string;
+      details?: string;
+      ipAddress?: string;
+      userAgent?: string;
+    }) => {
+      try {
+        const log = await prisma.userActivityLog.create({
+          data: {
+            userId: data.userId,
+            action: data.action,
+            details: data.details,
+            ipAddress: data.ipAddress,
+            userAgent: data.userAgent,
+          },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        });
+
+        // Broadcast the new log to all connected clients
+        io.emit('activity-log', log);
+      } catch (error) {
+        console.error('Error handling activity log:', error);
+        socket.emit('error', { message: 'Failed to log activity' });
+      }
     });
 
     socket.on('disconnect', (reason) => {

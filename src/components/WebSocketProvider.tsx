@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { toast } from "sonner";
 
 interface WebSocketContextType {
   socket: Socket | null;
@@ -62,6 +63,13 @@ export default function WebSocketProvider({
 
     socketInstance.on('reconnect_failed', () => {
       console.error('WebSocket reconnection failed');
+    });
+
+    // Add activity log event listener
+    socketInstance.on('activity-log', (log) => {
+      toast.info('New activity logged', {
+        description: `${log.user.name} - ${log.action}`,
+      });
     });
 
     setSocket(socketInstance);

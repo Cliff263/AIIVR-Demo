@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
 
 	// If trying to access protected pages while logged out, redirect to sign in
 	if (!isAuthPage && !isPublicRoute && !session) {
-		return NextResponse.redirect(new URL('/auth/sign-up', request.url));
+		return NextResponse.redirect(new URL('/auth/sign-in', request.url));
 	}
 
 	// CSRF Protection for non-GET requests
@@ -49,11 +49,11 @@ export const config = {
 	matcher: [
 		/*
 		 * Match all request paths except for the ones starting with:
-		 * - api (API routes)
 		 * - _next/static (static files)
 		 * - _next/image (image optimization files)
 		 * - favicon.ico (favicon file)
+		 * - public folder
 		 */
-		'/((?!api|_next/static|_next/image|favicon.ico).*)',
+		'/((?!_next/static|_next/image|favicon.ico|public/).*)',
 	],
 } 
