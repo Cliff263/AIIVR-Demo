@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
+export const useSocket = (userId: string, role: 'AGENT' | 'SUPERVISOR') => {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
 
   useEffect(() => {
-    // Only attempt to connect and join rooms if a valid userId is provided
-    if (userId <= 0 || isNaN(userId)) {
-      console.warn('useSocket: Invalid userId provided, not connecting or joining rooms.', userId);
-      // Ensure existing socket is disconnected if userId becomes invalid
-      if (socketRef.current && socketRef.current.connected) {
+    // Only attempt to connect if a valid userId is provided
+    if (!userId || userId.trim() === '') {
+      console.warn('useSocket: Invalid userId provided, not connecting.', userId);
+      if (socketRef.current?.connected) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
@@ -26,102 +27,95 @@ export const useSocket = (userId: number, role: 'AGENT' | 'SUPERVISOR') => {
     const socket = io(baseUrl, {
       path: '/api/socket',
       addTrailingSlash: false,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: maxReconnectAttempts,
       reconnectionDelay: 1000,
       timeout: 45000,
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'], // Only use WebSocket transport
       autoConnect: true,
       forceNew: true,
       withCredentials: true,
-      upgrade: true,
-      rememberUpgrade: true,
-      rejectUnauthorized: false,
+      auth: {
+        agentId: userId,
+        role: role
+      }
     });
 
     // Connection event handlers
     socket.on('connect', () => {
       console.log('WebSocket connected successfully');
       setIsConnected(true);
-       // Join appropriate room based on role after successful connection
-      if (role === 'AGENT') {
-        socket.emit('join-agent-room', userId);
-      } else {
-        socket.emit('join-supervisor-room', userId);
-      }
+      reconnectAttemptsRef.current = 0;
     });
 
     socket.on('connect_error', (error) => {
       console.error('WebSocket connection error:', error);
       setIsConnected(false);
+      reconnectAttemptsRef.current++;
+      
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        console.error('Max reconnection attempts reached, stopping reconnection');
+        socket.disconnect();
+      }
     });
 
     socket.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
 
-    socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+    socket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
       setIsConnected(false);
-    });
-
-    socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`WebSocket reconnection attempt ${attemptNumber}`);
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log(`WebSocket reconnected after ${attemptNumber} attempts`);
-      setIsConnected(true);
-    });
-
-    socket.on('reconnect_error', (error) => {
-      console.error('WebSocket reconnection error:', error);
-    });
-
-    socket.on('reconnect_failed', () => {
-      console.error('WebSocket reconnection failed');
-      setIsConnected(false);
+      
+      // If the disconnect was not initiated by the client, attempt to reconnect
+      if (reason !== 'io client disconnect' && reconnectAttemptsRef.current < maxReconnectAttempts) {
+        console.log('Attempting to reconnect...');
+        socket.connect();
+      }
     });
 
     socketRef.current = socket;
 
-    // Cleanup on unmount or when userId/role changes to invalid
+    // Cleanup on unmount or when userId/role changes
     return () => {
-      if (socketRef.current && socketRef.current.connected) {
+      if (socketRef.current?.connected) {
         console.log('Disconnecting WebSocket...');
         socketRef.current.disconnect();
         socketRef.current = null;
         setIsConnected(false);
       }
     };
-  }, [userId, role]); // Re-run effect if userId or role changes
+  }, [userId, role]);
 
   const emitStatusChange = (status: string, pauseReason?: string) => {
-    if (socketRef.current) {
-      socketRef.current.emit('agent-status-change', {
-        agentId: userId,
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('status-change', {
         status,
         pauseReason,
       });
+    } else {
+      console.warn('Cannot emit status change: Socket not connected');
     }
   };
 
   const emitCallUpdate = (callId: number, status: string) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('call-update', {
-        agentId: userId,
         callId,
         status,
       });
+    } else {
+      console.warn('Cannot emit call update: Socket not connected');
     }
   };
 
   const emitQueryUpdate = (queryId: number, status: string) => {
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('query-update', {
-        agentId: userId,
         queryId,
         status,
       });
+    } else {
+      console.warn('Cannot emit query update: Socket not connected');
     }
   };
 

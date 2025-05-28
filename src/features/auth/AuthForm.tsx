@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Icons } from "@/components/ui/icons";
-import { registerUser } from "@/actions/auth";
+import { registerUser, signIn as customSignIn } from "@/actions/auth";
 import Form from "next/form";
 
 interface AuthFormProps {
@@ -30,21 +29,23 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
     if (mode === "signin") {
       try {
-        const result = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        });
+        const result = await customSignIn(email, password);
 
-        if (result?.error) {
-          setError("Invalid email or password");
+        if (result.error) {
+          setError(result.error);
+          setIsLoading(false);
           return;
         }
 
-        router.push("/dashboard");
+        if (result.user?.role === "SUPERVISOR") {
+          router.push("/supervisor");
+        } else {
+          router.push("/agent");
+        }
         router.refresh();
-      } catch (error) {
-        setError("An error occurred. Please try again.");
+      } catch (error: any) {
+        setError(error.message || "An error occurred during sign in.");
+        setIsLoading(false);
       }
     } else {
       const name = formData.get("name") as string;

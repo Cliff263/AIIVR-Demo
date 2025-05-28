@@ -6,6 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { prisma } from "@/lib/prisma";
 import type { UserStatus } from "@prisma/client";
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -54,6 +55,7 @@ export default async function RootLayout({
             {children}
           </div>
         </main>
+        <Toaster />
       </body>
     </html>
   );

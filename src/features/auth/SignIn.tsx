@@ -29,12 +29,12 @@ export default function SignIn() {
 
       // Redirect based on user role
       if (result.user?.role === "SUPERVISOR") {
-        router.push("/dashboard/supervisor");
+        router.push("/supervisor");
       } else {
-        router.push("/dashboard/agent");
+        router.push("/agent");
       }
       router.refresh();
-    } catch (error) {
+    } catch {
       setError("An error occurred. Please try again.");
     } finally {
       setIsPending(false);
@@ -42,16 +42,16 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="flex flex-col bg-white">
       {/* Top Banner */}
-      <div className="w-full bg-black text-white text-center text-sm py-2">
+      <div className="w-full bg-blue-600 text-white text-center text-sm py-2 mt-[-1px]">
         AIIVR CALL CENTER MANAGEMENT SYSTEM
       </div>
 
       {/* Form Wrapper */}
-      <Form action={handleSignIn} className="max-w-md mx-auto my-16 p-8 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl text-rose-600 font-bold text-center mb-2">AIIVR LOGIN</h1>
-        <p className="text-center text-sm text-rose-600 font-semibold mb-2">Welcome Back!</p>
+      <Form action={handleSignIn} className="max-w-md min-w-[300px] mx-auto my-16 p-8 bg-white rounded-lg shadow-md">
+        <h1 className="text-2xl text-blue-600 font-bold text-center mb-2">AIIVR LOGIN</h1>
+        <p className="text-center text-sm text-blue-600 font-semibold mb-2">Welcome Back!</p>
         <p className="text-center text-sm text-gray-600 font-semibold mb-6">
           SignIn to Access Your Account!
         </p>
@@ -99,7 +99,7 @@ export default function SignIn() {
           <button
             type="submit"
             disabled={isPending}
-            className={`w-full bg-rose-600 text-white py-3 rounded-md hover:bg-rose-700 transition-colors font-medium flex items-center justify-center gap-2 ${
+            className={`w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 ${
               isPending ? "opacity-75 cursor-not-allowed" : ""
             }`}
           >
@@ -123,7 +123,7 @@ export default function SignIn() {
           {/* Sign Up Link */}
           <p className="text-center text-sm text-gray-600">
             Don&apos;t have an account?{" "}
-            <Link href="/auth/sign-up" className="font-medium text-rose-600 hover:text-rose-700">
+            <Link href="/auth/sign-up" className="font-medium text-blue-600 hover:text-blue-700">
               Sign up here
             </Link>
           </p>

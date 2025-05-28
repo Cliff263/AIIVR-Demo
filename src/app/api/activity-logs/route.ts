@@ -26,14 +26,14 @@ export async function GET(request: Request) {
     
     if (search) {
       where.OR = [
-        { details: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
         { user: { name: { contains: search, mode: 'insensitive' } } },
         { user: { email: { contains: search, mode: 'insensitive' } } }
       ]
     }
 
     if (action) {
-      where.action = action
+      where.type = action
     }
 
     if (role) {
@@ -76,9 +76,8 @@ export async function GET(request: Request) {
     const formattedLogs = logs.map((log) => ({
       id: log.id,
       createdAt: log.createdAt.toISOString(),
-      action: log.action,
-      details: log.details,
-      ipAddress: log.ipAddress,
+      type: log.type,
+      description: log.description,
       user: {
         name: log.user.name,
         email: log.user.email,
@@ -104,15 +103,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { action, details, ipAddress, userAgent } = body;
+    const { type, description } = body;
 
     const log = await prisma.userActivityLog.create({
       data: {
         userId: user.id,
-        action,
-        details,
-        ipAddress,
-        userAgent,
+        type,
+        description: description || ''
       },
       include: {
         user: {

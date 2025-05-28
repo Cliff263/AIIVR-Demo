@@ -11,9 +11,9 @@ export default async function HomePage() {
   // Redirect based on user role
   switch (user.role) {
     case 'SUPERVISOR':
-      redirect('/dashboard/supervisor');
+      redirect('/supervisor');
     case 'AGENT':
-      redirect('/dashboard/agent');
+      redirect('/agent');
     default:
       // If role is invalid, clear session and redirect to sign-in
       redirect('/auth/sign-in');

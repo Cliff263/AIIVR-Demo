@@ -94,6 +94,8 @@ model UserActivityLog {
   timestamp   DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model User {
@@ -118,6 +120,7 @@ model User {
   activityLogs UserActivityLog[]
   statusInfo   AgentStatusInfo?
   statusHistory AgentStatusHistory[]
+  monitoringActions MonitoringAction[]
 }
 
 model Session {
@@ -145,6 +148,7 @@ model Call {
   queries     Query[]     @relation("QueryCalls")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  monitoringActions MonitoringAction[]
 }
 
 model Recording {
@@ -231,4 +235,17 @@ model AgentStatusHistory {
   status      AgentStatus
   pauseReason PauseReason?
   createdAt   DateTime    @default(now())
+}
+
+model MonitoringAction {
+  id           String   @id @default(cuid())
+  callId       Int
+  action       String   // START_MONITORING, STOP_MONITORING, START_WHISPER, STOP_WHISPER, START_BARGE, STOP_BARGE
+  supervisorId String
+  timestamp    DateTime @default(now())
+  supervisor   User     @relation(fields: [supervisorId], references: [id])
+  call         Call     @relation(fields: [callId], references: [id])
+
+  @@index([callId])
+  @@index([supervisorId])
 }

@@ -2,9 +2,9 @@ import { getCurrentSession } from "@/actions/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import AgentDashboard from "@/features/dashboard/components/AgentDashboard";
-import DashboardLayout from '@/components/DashboardLayout';
+import DashboardLayout from "@/app/dashboard/layout";
 
-export default async function AgentDashboardPage() {
+export default async function AgentHomePage() {
   const { user } = await getCurrentSession();
 
   if (!user) {

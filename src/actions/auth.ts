@@ -163,10 +163,8 @@ export const registerUser = async (name: string, email: string, password: string
 		await prisma.userActivityLog.create({
 			data: {
 				userId: user.id,
-				action: "REGISTER",
-				details: `User registered with role: ${user.role}`,
-				ipAddress: "SERVER",
-				userAgent: "SERVER"
+				type: "REGISTER",
+				description: `User registered with role: ${user.role}`
 			}
 		});
 
@@ -189,19 +187,15 @@ export const registerUser = async (name: string, email: string, password: string
 
 export const logActivity = async (
 	userId: string,
-	action: string,
-	details?: string,
-	ipAddress?: string,
-	userAgent?: string
+	type: string,
+	description?: string
 ) => {
 	try {
 		await prisma.userActivityLog.create({
 			data: {
 				userId,
-				action,
-				details,
-				ipAddress,
-				userAgent,
+				type,
+				description: description || ''
 			},
 		});
 	} catch (error) {

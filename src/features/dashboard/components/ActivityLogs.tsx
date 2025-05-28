@@ -30,9 +30,8 @@ const ACTIONS = [
 interface ActivityLog {
   id: string;
   createdAt: string;
-  action: string;
-  details: string;
-  ipAddress: string;
+  type: string;
+  description: string;
   user: {
     name: string;
     email: string;
@@ -137,8 +136,8 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
     };
   }, [socket]);
 
-  const getActionColor = (action: string) => {
-    switch (action) {
+  const getActionColor = (type: string) => {
+    switch (type) {
       case "LOGIN":
         return "bg-green-500";
       case "LOGOUT":
@@ -206,10 +205,10 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
             <div className="flex flex-wrap gap-4 items-center">
               <Select value={selectedAction === '' ? 'all' : selectedAction} onValueChange={v => setSelectedAction(v === 'all' ? '' : v)}>
                 <SelectTrigger className="w-[180px] border-blue-200 focus:border-blue-300 focus:ring-blue-300 text-gray-900">
-                  <SelectValue placeholder="Filter by action" />
+                  <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Actions</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   {ACTIONS.map((action) => (
                     <SelectItem key={action} value={action}>
                       {action}
@@ -287,21 +286,20 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                   <tr className="border-b transition-colors hover:bg-blue-50/50 data-[state=selected]:bg-blue-50">
                     <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Time</th>
                     <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">User</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Action</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Details</th>
-                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">IP Address</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Type</th>
+                    <th className="h-12 px-4 text-left align-middle font-medium text-blue-900">Description</th>
                   </tr>
                 </thead>
                 <tbody className="[&_tr:last-child]:border-0">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="p-4 text-center text-gray-500">
+                      <td colSpan={4} className="p-4 text-center text-gray-500">
                         Loading...
                       </td>
                     </tr>
                   ) : logs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-4 text-center text-gray-500">
+                      <td colSpan={4} className="p-4 text-center text-gray-500">
                         No logs found
                       </td>
                     </tr>
@@ -323,12 +321,11 @@ export function ActivityLogs({ userId, role }: ActivityLogsProps) {
                           </div>
                         </td>
                         <td className="p-4 align-middle">
-                          <Badge className={getActionColor(log.action)}>
-                            {log.action}
+                          <Badge className={getActionColor(log.type)}>
+                            {log.type}
                           </Badge>
                         </td>
-                        <td className="p-4 align-middle text-gray-900">{log.details}</td>
-                        <td className="p-4 align-middle text-gray-900">{log.ipAddress}</td>
+                        <td className="p-4 align-middle text-gray-900">{log.description}</td>
                       </tr>
                     ))
                   )}

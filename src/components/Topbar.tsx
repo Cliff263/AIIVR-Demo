@@ -63,7 +63,7 @@ export default function Topbar({ user }: TopbarProps) {
   const [status, setStatus] = useState<UserStatus>(user.status?.status || 'OFFLINE');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  const { socket, isConnected, emitStatusChange } = useSocket(parseInt(user.id, 10), user.role);
+  const { socket, isConnected, emitStatusChange } = useSocket(user.id, user.role);
 
   useEffect(() => {
     if (user?.role === 'AGENT' && status === 'OFFLINE' && isConnected) {

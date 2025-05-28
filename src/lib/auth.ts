@@ -1,4 +1,3 @@
-import { authConfig } from "./auth.config";
 import { getCurrentSession } from "@/actions/auth";
 
 export const { auth } = {

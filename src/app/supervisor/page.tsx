@@ -2,9 +2,9 @@ import { getCurrentSession } from "@/actions/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import SupervisorDashboard from "@/features/dashboard/components/SupervisorDashboard";
-import DashboardLayout from '@/components/DashboardLayout';
+import DashboardLayout from "@/app/dashboard/layout";
 
-export default async function SupervisorDashboardPage() {
+export default async function SupervisorHomePage() {
   const { user } = await getCurrentSession();
 
   if (!user) {

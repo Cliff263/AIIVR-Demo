@@ -22,7 +22,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar stays fixed on the left */}
       <div className="fixed inset-y-0 left-0 z-40 w-64 hidden md:flex">
-        <Sidebar />
+        <Sidebar user={user} />
       </div>
 
       {/* Main content now spans full width without left margin */}

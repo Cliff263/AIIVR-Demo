@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       AND: [
         startDate ? { createdAt: { gte: new Date(startDate) } } : {},
         endDate ? { createdAt: { lte: new Date(endDate) } } : {},
-        action ? { action } : {},
+        action ? { type: action } : {},
         role ? { user: { role } } : {},
       ],
     };
@@ -46,32 +46,36 @@ export async function GET(request: Request) {
     let content: string;
     let headers: Headers;
 
-    if (fileFormat === "json") {
-      content = JSON.stringify(logs, null, 2);
-      headers = new Headers();
-      headers.set("Content-Type", "application/json");
-      headers.set("Content-Disposition", `attachment; filename="activity-logs-${format(new Date(), "yyyy-MM-dd")}.json"`);
+    if (fileFormat === "csv") {
+      content = logs.map(log => {
+        return [
+          format(new Date(log.createdAt), "yyyy-MM-dd HH:mm:ss"),
+          log.user.name,
+          log.user.email,
+          log.user.role,
+          log.type,
+          log.description
+        ].join(",");
+      }).join("\n");
+
+      headers = new Headers({
+        "Content-Type": "text/csv",
+        "Content-Disposition": `attachment; filename="activity-logs-${format(new Date(), "yyyy-MM-dd")}.csv"`
+      });
     } else {
-      // CSV format
-      const csvHeaders = ["Timestamp", "User", "Email", "Role", "Action", "Details", "IP Address"];
-      const rows = logs.map(log => [
-        format(new Date(log.createdAt), "yyyy-MM-dd HH:mm:ss"),
-        log.user.name,
-        log.user.email,
-        log.user.role,
-        log.action,
-        log.details || "",
-        log.ipAddress || "",
-      ]);
+      content = JSON.stringify(logs.map(log => ({
+        timestamp: format(new Date(log.createdAt), "yyyy-MM-dd HH:mm:ss"),
+        userName: log.user.name,
+        userEmail: log.user.email,
+        userRole: log.user.role,
+        type: log.type,
+        description: log.description
+      })), null, 2);
 
-      content = [
-        csvHeaders.join(","),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
-      ].join("\n");
-
-      headers = new Headers();
-      headers.set("Content-Type", "text/csv");
-      headers.set("Content-Disposition", `attachment; filename="activity-logs-${format(new Date(), "yyyy-MM-dd")}.csv"`);
+      headers = new Headers({
+        "Content-Type": "application/json",
+        "Content-Disposition": `attachment; filename="activity-logs-${format(new Date(), "yyyy-MM-dd")}.json"`
+      });
     }
 
     return new NextResponse(content, {

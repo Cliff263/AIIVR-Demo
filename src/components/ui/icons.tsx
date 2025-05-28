@@ -11,6 +11,7 @@ import {
   ExclamationCircleIcon,
   PhoneXMarkIcon,
   ArrowPathIcon as SpinnerIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline';
 
 export const Icons = {
@@ -27,6 +28,8 @@ export const Icons = {
   refresh: ArrowPathIcon,
   error: ExclamationCircleIcon,
   spinner: SpinnerIcon,
+  checkCircle: CheckCircleIcon,
+  star: StarIcon,
 } as const;
 
 export type IconName = keyof typeof Icons; 
