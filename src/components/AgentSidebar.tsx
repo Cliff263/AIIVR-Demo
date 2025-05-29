@@ -24,35 +24,21 @@ export default function AgentSidebar({ user }: AgentSidebarProps) {
             <Home className="w-5 h-5" /> Dashboard
           </Link>
         </div>
-        <div className="text-xs font-semibold text-blue-200 px-4 mt-6 mb-2">CALL MANAGEMENT</div>
+        <div className="text-xs font-semibold text-blue-200 px-4 mt-6 mb-2">REPORTING</div>
         <div className="space-y-1">
-          <Link href="/agent/calls" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <Phone className="w-5 h-5" /> My Calls
-          </Link>
           <Link href="/agent/activity" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             <Activity className="w-5 h-5" /> Activity Logs
+          </Link>
+          <Link href="/agent/metrics" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            <BarChart2 className="w-5 h-5" /> Performance Overview
+          </Link>
+          <Link href="/agent/calls" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            <Phone className="w-5 h-5" /> My Calls
           </Link>
           <Link href="/agent/queries" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             <HelpCircle className="w-5 h-5" /> Assigned Queries
           </Link>
-          <Link href="/agent/call-groups" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <Headphones className="w-5 h-5" /> Call Groups
-          </Link>
         </div>
-
-        <div className="text-xs font-semibold text-blue-200 px-4 mt-6 mb-2">PERFORMANCE</div>
-        <div className="space-y-1">
-          <Link href="/agent/metrics" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <BarChart2 className="w-5 h-5" /> My Metrics
-          </Link>
-          <Link href="/agent/schedule" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <Clock className="w-5 h-5" /> Schedule
-          </Link>
-          <Link href="/agent/status" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-            <UserCheck className="w-5 h-5" /> Status Management
-          </Link>
-        </div>
-
         <div className="mt-auto pt-8">
           <Link href="/support" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             <HelpCircle className="w-5 h-5" /> Support

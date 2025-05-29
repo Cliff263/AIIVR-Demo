@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCurrentSession } from '@/actions/auth';
 import prisma from '@/lib/prisma';
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
+    const { user } = await getCurrentSession();
+    if (!user) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -14,6 +13,11 @@ export async function GET(request: Request) {
     const agentId = searchParams.get('agentId');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+
+    // If user is an agent, they can only view their own metrics
+    if (user.role === 'AGENT' && user.id !== agentId) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
 
     const where = {
       ...(agentId ? { agentId } : {}),

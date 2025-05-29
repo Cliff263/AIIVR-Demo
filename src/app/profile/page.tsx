@@ -97,69 +97,63 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Profile Information</h3>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 flex items-center justify-center">
+      <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-white shadow-2xl rounded-3xl overflow-hidden border border-blue-100">
+          <div className="px-6 py-8 border-b border-blue-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-200 to-purple-200 flex items-center justify-center text-4xl font-bold text-blue-900 shadow-md">
+                {user.name?.[0]}
+              </div>
+              <div>
+                <h3 className="text-2xl font-extrabold text-blue-900">{user.name}</h3>
+                <p className="text-base text-blue-700">{user.email}</p>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ml-0 mt-2 ${getStatusColor(status)} shadow-sm`}>{statusLoading ? "Loading..." : status}</span>
+                {pauseReason && (
+                  <span className="ml-2 text-xs text-gray-500">({pauseReason})</span>
+                )}
+                <span className={`ml-4 text-xs ${isConnected ? "text-green-600" : "text-gray-400"}`}>{isConnected ? "LIVE" : "OFFLINE"}</span>
+              </div>
+            </div>
             {user.role === "AGENT" && (
               <AgentStatusToggle status={statusState} setStatus={updateStatus} socket={socket} />
             )}
           </div>
-          <div className="border-t border-gray-200">
-            <dl className="divide-y divide-gray-200">
-              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-700">Full name</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user.name}</dd>
-              </div>
-              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-700">Email address</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user.email}</dd>
-              </div>
-              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-700">Role</dt>
-                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user.role}</dd>
-              </div>
-              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-700">Status</dt>
-                <dd className="mt-1 text-sm sm:mt-0 sm:col-span-2">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                    {statusLoading ? "Loading..." : status}
-                  </span>
-                  {pauseReason && (
-                    <span className="ml-2 text-xs text-gray-500">({pauseReason})</span>
-                  )}
-                  <span className={`ml-4 text-xs ${isConnected ? "text-green-600" : "text-gray-400"}`}>
-                    {isConnected ? "LIVE" : "OFFLINE"}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        {user.role === "SUPERVISOR" && agents.length > 0 && (
-          <div className="mt-8 bg-white shadow-sm rounded-lg overflow-hidden">
-            <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Assigned Agents</h3>
+          <dl className="divide-y divide-blue-100">
+            <div className="py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-base font-semibold text-blue-900">Full name</dt>
+              <dd className="mt-1 text-base text-blue-700 sm:mt-0 sm:col-span-2">{user.name}</dd>
             </div>
-            <div className="border-t border-gray-200">
-              <ul className="divide-y divide-gray-200">
+            <div className="py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-base font-semibold text-blue-900">Email address</dt>
+              <dd className="mt-1 text-base text-blue-700 sm:mt-0 sm:col-span-2">{user.email}</dd>
+            </div>
+            <div className="py-6 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt className="text-base font-semibold text-blue-900">Role</dt>
+              <dd className="mt-1 text-base text-blue-700 sm:mt-0 sm:col-span-2">{user.role}</dd>
+            </div>
+          </dl>
+        </div>
+        {user.role === "SUPERVISOR" && (
+          <div className="mt-8 bg-white shadow-2xl rounded-3xl overflow-hidden border border-blue-100">
+            <div className="px-6 py-6 border-b border-blue-100">
+              <h3 className="text-xl font-bold text-blue-900">Assigned Agents</h3>
+            </div>
+            <div className="border-t border-blue-100">
+              <ul className="divide-y divide-blue-100">
                 {agents.map((agent) => (
-                  <li key={agent.id} className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{agent.name}</p>
-                        <p className="text-sm text-gray-500">{agent.email}</p>
-                      </div>
-                      <div>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(agentStatuses[agent.id]?.status)}`}>
-                          {agentStatuses[agent.id]?.status || "OFFLINE"}
-                        </span>
-                        {agentStatuses[agent.id]?.pauseReason && (
-                          <span className="ml-2 text-xs text-gray-500">({agentStatuses[agent.id]?.pauseReason})</span>
-                        )}
-                      </div>
+                  <li key={agent.id} className="px-6 py-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-base font-semibold text-blue-900">{agent.name}</p>
+                      <p className="text-sm text-blue-700">{agent.email}</p>
+                    </div>
+                    <div>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(agentStatuses[agent.id]?.status)} shadow-sm`}>
+                        {agentStatuses[agent.id]?.status || "OFFLINE"}
+                      </span>
+                      {agentStatuses[agent.id]?.pauseReason && (
+                        <span className="ml-2 text-xs text-gray-500">({agentStatuses[agent.id]?.pauseReason})</span>
+                      )}
                     </div>
                   </li>
                 ))}
