@@ -79,8 +79,8 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
       agentName?: string;
       pauseReason?: string;
     }) => {
-      setAgents(prevAgents => {
-        const updatedAgents = prevAgents.map(agent =>
+      setAgents((prevAgents: { id: string; name: string; calls: any[]; statusInfo: any }[]) => {
+        const updatedAgents = prevAgents.map((agent) =>
           agent.id === data.agentId
             ? {
                 ...agent,
@@ -108,7 +108,7 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
     };
   }, [socket, mutate]);
 
-  const totalCalls = agents.reduce((acc, agent) => acc + agent.calls.length, 0);
+  const totalCalls = agents.reduce((acc: number, agent: { calls: any[] }) => acc + agent.calls.length, 0);
   const averageHandleTime = "5m 30s"; // This should be calculated from actual data
   const queueSize = 12; // This should be fetched from the queue system
 

@@ -12,6 +12,7 @@ import { UserStatus } from "@prisma/client";
 import { useSocket } from "@/hooks/useSocket";
 import { toast } from "sonner";
 import { AgentActivityLogs } from '@/features/activity/components/AgentActivityLogs';
+import useSWR from 'swr';
 
 interface Call {
   id: string;
@@ -33,9 +34,12 @@ interface AgentDashboardProps {
   };
 }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 export default function AgentDashboard({ agentData }: AgentDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const { socket } = useSocket(agentData?.id || null, 'AGENT');
+  const { data: metrics, mutate: mutateMetrics } = useSWR(`/api/metrics?agentId=${agentData.id}`, fetcher, { refreshInterval: 0 });
 
   useEffect(() => {
     if (!socket) return;
@@ -70,18 +74,27 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
       );
     };
 
+    // Listen for real-time metric updates
+    const handleMetricUpdate = () => {
+      mutateMetrics();
+    };
+
     // Join agent room for notifications
     socket.emit('join-room', `agent-${agentData.id}`);
 
     // Listen for events
     socket.on('status-update', handleStatusUpdate);
     socket.on('supervisor-intervention', handleSupervisorIntervention);
+    socket.on('agent-performance-update', handleMetricUpdate);
+    socket.on('call-update', handleMetricUpdate);
 
     return () => {
       socket.off('status-update', handleStatusUpdate);
       socket.off('supervisor-intervention', handleSupervisorIntervention);
+      socket.off('agent-performance-update', handleMetricUpdate);
+      socket.off('call-update', handleMetricUpdate);
     };
-  }, [socket, agentData.id]);
+  }, [socket, agentData.id, mutateMetrics]);
 
   if (!agentData) {
     return (
@@ -104,7 +117,7 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
             <Phone className="h-5 w-5 text-green-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-extrabold text-green-900">{agentData.calls.length}</div>
+            <div className="text-2xl font-extrabold text-green-900">{metrics?.callsHandled ?? 0}</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-purple-100 to-purple-300 border-purple-200 shadow-md">
@@ -113,7 +126,7 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
             <Clock className="h-5 w-5 text-purple-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-extrabold text-purple-900">5m 30s</div>
+            <div className="text-2xl font-extrabold text-purple-900">{metrics ? `${Math.floor(metrics.averageHandleTime / 60)}m ${Math.round(metrics.averageHandleTime % 60)}s` : '0m 0s'}</div>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-yellow-100 to-yellow-300 border-yellow-200 shadow-md">
@@ -122,7 +135,7 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
             <CheckCircle className="h-5 w-5 text-yellow-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-extrabold text-yellow-900">85%</div>
+            <div className="text-2xl font-extrabold text-yellow-900">{metrics?.firstCallResolution ?? 0}%</div>
           </CardContent>
         </Card>
       </div>
