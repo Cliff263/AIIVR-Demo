@@ -20,10 +20,7 @@ export async function GET() {
 
     const calls = await prisma.call.findMany({
       where: {
-        OR: [
-          { agentId: user.id },
-          { supervisorId: user.id }
-        ]
+        agentId: user.id
       },
       orderBy: {
         timestamp: 'desc'

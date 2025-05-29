@@ -17,7 +17,6 @@ app.prepare().then(() => {
   
   // Initialize Socket.IO with proper configuration
   const io = new Server(httpServer, {
-    path: '/api/socket',
     addTrailingSlash: false,
     cors: {
       origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
@@ -25,7 +24,7 @@ app.prepare().then(() => {
       credentials: true,
       allowedHeaders: ['Content-Type', 'Authorization']
     },
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
     pingTimeout: 45000,
     pingInterval: 25000,
     connectTimeout: 45000,
@@ -248,7 +247,7 @@ app.prepare().then(() => {
           await prisma.agentStatusInfo.update({
             where: { userId: data.agentId },
             data: {
-              status: data.newStatus,
+              status: data.newStatus as AgentStatus,
               lastActive: new Date()
             }
           });
