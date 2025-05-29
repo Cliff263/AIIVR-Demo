@@ -23,7 +23,7 @@ export default function Sidebar({ user }: SidebarProps) {
       </div>
       <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
         <div>
-          <Link href="/dashboard" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+          <Link href={isSupervisor ? "/supervisor" : isAgent ? "/agent" : "/"} className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             <Home className="w-5 h-5" /> Home
           </Link>
         </div>

@@ -111,21 +111,21 @@ export function PerformanceMetrics({ agentId, detailed = false }: PerformanceMet
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">Calls Handled</h3>
-          <p className="text-2xl font-bold mt-1">{metrics.callsHandled}</p>
+        <Card className="bg-gradient-to-br from-blue-100 to-blue-300 border-blue-200 shadow-md">
+          <h3 className="text-sm font-semibold text-blue-900">Calls Handled</h3>
+          <p className="text-2xl font-extrabold text-blue-900 mt-1">{metrics.callsHandled}</p>
         </Card>
-        <Card className="p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">Avg Handle Time</h3>
-          <p className="text-2xl font-bold mt-1">{formatTime(metrics.averageHandleTime)}</p>
+        <Card className="bg-gradient-to-br from-purple-100 to-purple-300 border-purple-200 shadow-md">
+          <h3 className="text-sm font-semibold text-purple-900">Avg Handle Time</h3>
+          <p className="text-2xl font-extrabold text-purple-900 mt-1">{formatTime(metrics.averageHandleTime)}</p>
         </Card>
-        <Card className="p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">First Call Resolution</h3>
-          <p className="text-2xl font-bold mt-1">{metrics.firstCallResolution}%</p>
+        <Card className="bg-gradient-to-br from-green-100 to-green-300 border-green-200 shadow-md">
+          <h3 className="text-sm font-semibold text-green-900">First Call Resolution</h3>
+          <p className="text-2xl font-extrabold text-green-900 mt-1">{metrics.firstCallResolution}%</p>
         </Card>
-        <Card className="p-4">
-          <h3 className="text-sm font-medium text-muted-foreground">Customer Satisfaction</h3>
-          <p className="text-2xl font-bold mt-1">{metrics.customerSatisfaction}%</p>
+        <Card className="bg-gradient-to-br from-yellow-100 to-yellow-300 border-yellow-200 shadow-md">
+          <h3 className="text-sm font-semibold text-yellow-900">Customer Satisfaction</h3>
+          <p className="text-2xl font-extrabold text-yellow-900 mt-1">{metrics.customerSatisfaction}%</p>
         </Card>
       </div>
 

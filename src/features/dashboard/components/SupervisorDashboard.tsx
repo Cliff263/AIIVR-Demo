@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Phone, Clock, BarChart2, AlertCircle, Zap, LineChart } from 'lucide-react';
@@ -8,6 +8,10 @@ import { TeamOverview } from '@/features/team/components/TeamOverview';
 import { LiveMonitoring } from '@/features/monitoring/components/LiveMonitoring';
 import { Analytics } from '@/features/analytics/components/Analytics';
 import { QueryManagement } from '@/features/queries/components/QueryManagement';
+import { useSocket } from "@/hooks/useSocket";
+import { toast } from "sonner";
+import { UserRole } from "@prisma/client";
+import { useRouter } from "next/navigation";
 
 interface SupervisorDashboardProps {
   supervisorData: {
@@ -32,6 +36,67 @@ interface SupervisorDashboardProps {
 
 export default function SupervisorDashboard({ supervisorData }: SupervisorDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const { socket } = useSocket(supervisorData.id, 'SUPERVISOR');
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Handle agent status updates
+    const handleAgentStatusUpdate = (data: { 
+      agentId: string; 
+      status: string; 
+      description?: string;
+      changedBy?: string;
+      timestamp: Date;
+    }) => {
+      const agent = supervisorData.agents.find(a => a.id === data.agentId);
+      if (agent) {
+        toast.info(
+          `${agent.name} status changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}`,
+          {
+            description: data.description,
+            duration: 5000
+          }
+        );
+      }
+    };
+
+    // Handle performance updates
+    const handlePerformanceUpdate = (data: {
+      agentId: string;
+      metrics: {
+        callsHandled: number;
+        avgCallTime: number;
+        satisfaction: number;
+        resolution: number;
+      };
+      timestamp: Date;
+    }) => {
+      const agent = supervisorData.agents.find(a => a.id === data.agentId);
+      if (agent) {
+        toast.success(
+          `${agent.name}'s performance updated`,
+          {
+            description: `${data.metrics.callsHandled} calls handled, ${data.metrics.avgCallTime}s avg time`,
+            duration: 5000
+          }
+        );
+      }
+    };
+
+    // Join supervisor room for notifications
+    socket.emit('join-room', 'supervisors');
+
+    // Listen for events
+    socket.on('agent-status-update', handleAgentStatusUpdate);
+    socket.on('agent-performance-update', handlePerformanceUpdate);
+
+    return () => {
+      socket.off('agent-status-update', handleAgentStatusUpdate);
+      socket.off('agent-performance-update', handlePerformanceUpdate);
+    };
+  }, [socket, supervisorData.agents]);
 
   const totalCalls = supervisorData.agents.reduce((acc, agent) => acc + agent.calls.length, 0);
   const activeAgents = supervisorData.agents.filter(agent => agent.statusInfo?.status === 'ONLINE').length;
@@ -42,46 +107,46 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
     <div className="space-y-6">
       {/* Status and Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-white border-blue-100">
+        <Card className="bg-gradient-to-br from-blue-100 to-blue-300 border-blue-200 shadow-md hover:shadow-lg cursor-pointer transition-all" onClick={() => setActiveTab('team')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Active Agents</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-semibold text-blue-900">Active Agents</CardTitle>
+            <Users className="h-5 w-5 text-blue-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{activeAgents}</div>
-            <p className="text-xs text-blue-600">
+            <div className="text-2xl font-extrabold text-blue-900">{activeAgents}</div>
+            <p className="text-xs text-blue-700">
               of {supervisorData.agents.length} total agents
             </p>
           </CardContent>
         </Card>
-        <Card className="bg-white border-blue-100">
+        <Card className="bg-gradient-to-br from-green-100 to-green-300 border-green-200 shadow-md hover:shadow-lg cursor-pointer transition-all" onClick={() => router.push('/supervisor/calls')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Total Calls Today</CardTitle>
-            <Phone className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-semibold text-green-900">Total Calls Today</CardTitle>
+            <Phone className="h-5 w-5 text-green-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{totalCalls}</div>
+            <div className="text-2xl font-extrabold text-green-900">{totalCalls}</div>
           </CardContent>
         </Card>
-        <Card className="bg-white border-blue-100">
+        <Card className="bg-gradient-to-br from-yellow-100 to-yellow-300 border-yellow-200 shadow-md hover:shadow-lg cursor-pointer transition-all" onClick={() => setActiveTab('analytics')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Queue Size</CardTitle>
-            <AlertCircle className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-semibold text-yellow-900">Queue Size</CardTitle>
+            <AlertCircle className="h-5 w-5 text-yellow-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{queueSize}</div>
-            <p className="text-xs text-blue-600">
+            <div className="text-2xl font-extrabold text-yellow-900">{queueSize}</div>
+            <p className="text-xs text-yellow-700">
               calls waiting
             </p>
           </CardContent>
         </Card>
-        <Card className="bg-white border-blue-100">
+        <Card className="bg-gradient-to-br from-purple-100 to-purple-300 border-purple-200 shadow-md hover:shadow-lg cursor-pointer transition-all" onClick={() => setActiveTab('analytics')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-900">Avg Handle Time</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-semibold text-purple-900">Avg Handle Time</CardTitle>
+            <Clock className="h-5 w-5 text-purple-700" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{averageHandleTime}</div>
+            <div className="text-2xl font-extrabold text-purple-900">{averageHandleTime}</div>
           </CardContent>
         </Card>
       </div>
@@ -89,74 +154,66 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
       {/* Main Content Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="bg-blue-50">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Overview</TabsTrigger>
-          <TabsTrigger value="live" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Live Monitoring</TabsTrigger>
-          <TabsTrigger value="team" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Team</TabsTrigger>
-          <TabsTrigger value="analytics" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Analytics</TabsTrigger>
-          <TabsTrigger value="queries" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Queries</TabsTrigger>
+          <TabsTrigger value="overview" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-bold text-blue-900">Overview</TabsTrigger>
+          <TabsTrigger value="live" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-bold text-blue-900">Live Monitoring</TabsTrigger>
+          <TabsTrigger value="team" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-bold text-blue-900">Team</TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-bold text-blue-900">Analytics</TabsTrigger>
+          <TabsTrigger value="queries" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white font-bold text-blue-900">Queries</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-4 bg-white border-blue-100">
-              <CardHeader>
-                <CardTitle className="text-blue-900">Team Status</CardTitle>
+          <div className="grid gap-4">
+            <Card className="w-full bg-white border-0 shadow-xl rounded-2xl p-6 flex flex-col items-start justify-center min-h-[320px]">
+              <CardHeader className="w-full border-b-0 pb-0">
+                <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Performance Overview</CardTitle>
               </CardHeader>
-              <CardContent>
-                <TeamOverview agents={supervisorData.agents} />
-              </CardContent>
-            </Card>
-            <Card className="col-span-3 bg-white border-blue-100">
-              <CardHeader>
-                <CardTitle className="text-blue-900">Performance Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Analytics type="overview" />
+              <CardContent className="w-full pt-0">
+                <Analytics userRole={UserRole.SUPERVISOR} />
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
         <TabsContent value="live">
-          <Card className="bg-white border-blue-100">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Live Call Monitoring</CardTitle>
+          <Card className="w-full bg-white border-0 shadow-xl rounded-2xl p-6 flex flex-col items-start justify-center min-h-[320px]">
+            <CardHeader className="w-full border-b-0 pb-0">
+              <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Live Call Monitoring</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="w-full pt-0">
               <LiveMonitoring agents={supervisorData.agents} />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="team">
-          <Card className="bg-white border-blue-100">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Team Management</CardTitle>
+          <Card className="w-full bg-white border-0 shadow-xl rounded-2xl p-6 flex flex-col items-start justify-center min-h-[320px]">
+            <CardHeader className="w-full border-b-0 pb-0">
+              <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Team Management</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="w-full pt-0">
               <TeamOverview agents={supervisorData.agents} detailed />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="analytics">
-          <Card className="bg-white border-blue-100">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Detailed Analytics</CardTitle>
+          <Card className="w-full bg-white border-0 shadow-xl rounded-2xl p-6 flex flex-col items-start justify-center min-h-[320px]">
+            <CardHeader className="w-full border-b-0 pb-0">
+              <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Detailed Analytics</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Analytics type="detailed" />
+            <CardContent className="w-full pt-0">
+              <Analytics userRole={UserRole.SUPERVISOR} />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="queries">
-          <Card className="bg-white border-blue-100">
-            <CardHeader>
-              <CardTitle className="text-blue-900">Query Management</CardTitle>
+          <Card className="w-full bg-white border-0 shadow-xl rounded-2xl p-6 flex flex-col items-start justify-center min-h-[320px]">
+            <CardHeader className="w-full border-b-0 pb-0">
+              <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Query Management</CardTitle>
             </CardHeader>
-            <CardContent>
-              <QueryManagement supervisorId={supervisorData.id} />
+            <CardContent className="w-full pt-0">
+              <QueryManagement userRole={UserRole.SUPERVISOR} userId={supervisorData.id} />
             </CardContent>
           </Card>
         </TabsContent>

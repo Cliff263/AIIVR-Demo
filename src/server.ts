@@ -194,10 +194,150 @@ app.prepare().then(() => {
             },
           });
 
+          // Emit to all clients
           io.emit('activity-log', log);
+
+          // If it's a status change, emit to specific channels
+          if (data.type.startsWith('STATUS_CHANGE')) {
+            // Emit to supervisors for monitoring
+            io.to('supervisors').emit('agent-status-update', {
+              agentId,
+              status: data.type,
+              description: data.description,
+              timestamp: new Date()
+            });
+
+            // Emit to the specific agent
+            socket.to(`agent-${agentId}`).emit('status-update', {
+              status: data.type,
+              description: data.description,
+              timestamp: new Date()
+            });
+          }
+
+          // If it's a supervisor intervention, notify the agent
+          if (data.type === 'SUPERVISOR_INTERVENTION') {
+            socket.to(`agent-${agentId}`).emit('supervisor-intervention', {
+              description: data.description,
+              timestamp: new Date()
+            });
+          }
         } catch (error) {
           console.error('Error handling activity log:', error);
           socket.emit('error', { message: 'Failed to log activity' });
+        }
+      });
+
+      // Handle agent status change by supervisor
+      socket.on('supervisor-status-change', async (data: { agentId: string; newStatus: string; reason?: string }) => {
+        try {
+          if (role !== 'SUPERVISOR') {
+            throw new Error('Unauthorized');
+          }
+
+          const agent = await prisma.user.findUnique({
+            where: { id: data.agentId },
+            include: { statusInfo: true }
+          });
+
+          if (!agent) {
+            throw new Error('Agent not found');
+          }
+
+          // Update agent status
+          await prisma.agentStatusInfo.update({
+            where: { userId: data.agentId },
+            data: {
+              status: data.newStatus,
+              lastActive: new Date()
+            }
+          });
+
+          // Create activity log
+          const log = await prisma.userActivityLog.create({
+            data: {
+              userId: data.agentId,
+              type: 'STATUS_CHANGE_BY_SUPERVISOR',
+              description: `Status changed to ${data.newStatus} by supervisor ${user.name}${data.reason ? `: ${data.reason}` : ''}`
+            },
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+          });
+
+          // Emit updates
+          io.emit('activity-log', log);
+          io.to('supervisors').emit('agent-status-update', {
+            agentId: data.agentId,
+            status: data.newStatus,
+            changedBy: user.name,
+            timestamp: new Date()
+          });
+          socket.to(`agent-${data.agentId}`).emit('status-update', {
+            status: data.newStatus,
+            changedBy: user.name,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error('Error handling supervisor status change:', error);
+          socket.emit('error', { message: 'Failed to update agent status' });
+        }
+      });
+
+      // Handle performance metrics update
+      socket.on('performance-update', async (data: { 
+        agentId: string;
+        metrics: {
+          callsHandled: number;
+          avgCallTime: number;
+          satisfaction: number;
+          resolution: number;
+        }
+      }) => {
+        try {
+          await prisma.performanceMetrics.create({
+            data: {
+              userId: data.agentId,
+              callsHandled: data.metrics.callsHandled,
+              avgCallTime: data.metrics.avgCallTime,
+              satisfaction: data.metrics.satisfaction,
+              resolution: data.metrics.resolution
+            }
+          });
+
+          // Create activity log for metrics update
+          const log = await prisma.userActivityLog.create({
+            data: {
+              userId: data.agentId,
+              type: 'PERFORMANCE_UPDATE',
+              description: `Performance metrics updated: ${data.metrics.callsHandled} calls handled, ${data.metrics.avgCallTime}s avg time`
+            },
+            include: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
+          });
+
+          io.emit('activity-log', log);
+          io.to('supervisors').emit('agent-performance-update', {
+            agentId: data.agentId,
+            metrics: data.metrics,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error('Error handling performance update:', error);
+          socket.emit('error', { message: 'Failed to update performance metrics' });
         }
       });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Phone, Clock, CheckCircle, UserCheck } from 'lucide-react';
@@ -9,6 +9,8 @@ import { CallLogs } from '@/features/calls/components/CallLogs';
 import { PerformanceMetrics } from '@/features/metrics/components/PerformanceMetrics';
 import { AssignedQueries } from '@/features/queries/components/AssignedQueries';
 import { UserStatus } from "@prisma/client";
+import { useSocket } from "@/hooks/useSocket";
+import { toast } from "sonner";
 
 interface Call {
   id: string;
@@ -32,6 +34,53 @@ interface AgentDashboardProps {
 
 export default function AgentDashboard({ agentData }: AgentDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const { socket } = useSocket(agentData.id, 'AGENT');
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Handle status updates from supervisor
+    const handleStatusUpdate = (data: {
+      status: string;
+      changedBy?: string;
+      description?: string;
+      timestamp: Date;
+    }) => {
+      toast.info(
+        `Your status has been changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}`,
+        {
+          description: data.description,
+          duration: 5000
+        }
+      );
+    };
+
+    // Handle supervisor intervention
+    const handleSupervisorIntervention = (data: {
+      description: string;
+      timestamp: Date;
+    }) => {
+      toast.warning(
+        'Supervisor Intervention',
+        {
+          description: data.description,
+          duration: 5000
+        }
+      );
+    };
+
+    // Join agent room for notifications
+    socket.emit('join-room', `agent-${agentData.id}`);
+
+    // Listen for events
+    socket.on('status-update', handleStatusUpdate);
+    socket.on('supervisor-intervention', handleSupervisorIntervention);
+
+    return () => {
+      socket.off('status-update', handleStatusUpdate);
+      socket.off('supervisor-intervention', handleSupervisorIntervention);
+    };
+  }, [socket, agentData.id]);
 
   return (
     <div className="space-y-6">
@@ -49,7 +98,7 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
                 // Handle status update
                 console.log('Status updated:', status);
               }}
-              socket={null} // You'll need to pass the actual socket instance here
+              socket={socket}
             />
           </CardContent>
         </Card>
