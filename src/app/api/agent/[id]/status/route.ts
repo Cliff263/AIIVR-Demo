@@ -18,14 +18,14 @@ export async function GET(
     }
 
     // Check if user has permission to view this agent's status
-    if (user.role === 'AGENT' && user.id !== agentId) {
+    if (user.role === 'AGENT' && user.id !== agentId.toString()) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
     const agent = await prisma.user.findUnique({
-      where: { id: agentId },
+      where: { id: params.id },
       include: {
-        status: true,
+        statusInfo: true,
       },
     });
 
@@ -34,9 +34,9 @@ export async function GET(
     }
 
     return NextResponse.json({
-      status: agent.status?.status || 'OFFLINE',
-      pauseReason: agent.status?.pauseReason,
-      lastUpdated: agent.status?.updatedAt || new Date().toISOString(),
+      status: agent.statusInfo?.status || 'OFFLINE',
+      pauseReason: agent.statusInfo?.pauseReason,
+      lastUpdated: agent.statusInfo?.updatedAt || new Date().toISOString(),
     });
   } catch (error) {
     console.error('Error fetching agent status:', error);

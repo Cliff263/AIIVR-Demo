@@ -27,9 +27,18 @@ export default async function AgentHomePage() {
     redirect('/auth/sign-in');
   }
 
+  const agentDataWithStringIds = {
+    ...agentData,
+    calls: agentData.calls.map(call => ({
+      ...call,
+      id: call.id.toString(),
+      agentId: call.agentId?.toString?.() ?? call.agentId,
+    })),
+  };
+
   return (
     <DashboardLayout user={{ ...user, status: agentData.statusInfo }}>
-      <AgentDashboard agentData={agentData} />
+      <AgentDashboard agentData={agentDataWithStringIds} />
     </DashboardLayout>
   );
 } 
