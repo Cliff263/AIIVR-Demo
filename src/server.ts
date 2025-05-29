@@ -85,6 +85,11 @@ app.prepare().then(() => {
             select: { status: true }
           });
 
+          // Only proceed if the status is actually changing
+          if (prevStatusInfo?.status === data.status) {
+            return;
+          }
+
           // Update agent status in database
           const [user, statusInfo] = await prisma.$transaction([
             prisma.user.update({
@@ -144,7 +149,8 @@ app.prepare().then(() => {
             await prisma.notification.create({
               data: {
                 title: 'Agent Login',
-                message: `Agent ${agent?.name || agentId} logged in`,
+                message: `Agent ${agent?.name || agentId} is now ONLINE`,
+                visibleTo: 'SUPERVISOR',
               }
             });
           } else {
@@ -152,6 +158,7 @@ app.prepare().then(() => {
               data: {
                 title: 'Agent Status Change',
                 message: `Agent ${agent?.name || agentId} is now ${data.status}${data.pauseReason ? ` (${data.pauseReason})` : ''}`,
+                visibleTo: 'SUPERVISOR',
               }
             });
           }
@@ -325,6 +332,7 @@ app.prepare().then(() => {
             data: {
               title: 'Agent Status Change by Supervisor',
               message: `Agent ${agent?.name || data.agentId} status changed to ${data.newStatus} by supervisor ${user.name}${data.reason ? `: ${data.reason}` : ''}`,
+              visibleTo: 'SUPERVISOR',
             }
           });
         } catch (error) {
@@ -384,6 +392,7 @@ app.prepare().then(() => {
             data: {
               title: 'Agent Performance Update',
               message: `Agent ${agent?.name || data.agentId} performance updated: ${data.metrics.callsHandled} calls handled, ${data.metrics.avgCallTime}s avg time`,
+              visibleTo: 'SUPERVISOR',
             }
           });
         } catch (error) {
@@ -395,15 +404,22 @@ app.prepare().then(() => {
       // Handle disconnect
       socket.on('disconnect', async (reason) => {
         console.log('Client disconnected:', socket.id, 'Reason:', reason);
-        
         try {
           if (role === 'AGENT') {
+            // Fetch previous status before updating
+            const prevStatusInfo = await prisma.agentStatusInfo.findUnique({
+              where: { userId: agentId },
+              select: { status: true }
+            });
+            // Only log if previous status was not already OFFLINE
+            if (prevStatusInfo?.status === 'OFFLINE') {
+              return;
+            }
             // Update agent status to OFFLINE
             await prisma.user.update({
               where: { id: agentId },
               data: { status: 'OFFLINE' }
             });
-
             // Fetch agent name
             const agent = await prisma.user.findUnique({ where: { id: agentId }, select: { name: true } });
             console.log('[Server] Emitting agent-status-update (disconnect):', {
@@ -421,6 +437,7 @@ app.prepare().then(() => {
               data: {
                 title: 'Agent Status Change',
                 message: `Agent ${agent?.name || agentId} is now OFFLINE`,
+                visibleTo: 'SUPERVISOR',
               }
             });
           }

@@ -249,10 +249,12 @@ model MonitoringAction {
   @@index([callId])
   @@index([supervisorId])
 }
+
 model Notification {
   id        String   @id @default(uuid())
   title     String
   message   String
   createdAt DateTime @default(now())
   read      Boolean  @default(false)
+  visibleTo String   @default("SUPERVISOR")
 }

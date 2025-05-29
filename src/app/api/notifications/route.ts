@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCurrentSession } from '@/actions/auth';
 
 export async function GET() {
   try {
-    // Get all notifications from the last 24 hours
+    // Get the current user and their role
+    const { user } = await getCurrentSession();
+    if (!user) {
+      return NextResponse.json({ notifications: [] });
+    }
+
+    // Fetch notifications visible to this role
     const notifications = await prisma.notification.findMany({
       where: {
-        createdAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
-        }
+        visibleTo: user.role
       },
       orderBy: {
         createdAt: 'desc'
       },
-      take: 50 // Limit to last 50 notifications
+      take: 50
     });
 
     return NextResponse.json({

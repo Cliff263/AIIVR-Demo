@@ -12,6 +12,7 @@ import { useSocket } from "@/hooks/useSocket";
 import { toast } from "sonner";
 import { UserRole } from "@prisma/client";
 import { useRouter } from "next/navigation";
+import useSWR from 'swr';
 
 interface SupervisorDashboardProps {
   supervisorData: {
@@ -34,13 +35,22 @@ interface SupervisorDashboardProps {
   };
 }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 export default function SupervisorDashboard({ supervisorData }: SupervisorDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const { socket } = useSocket(supervisorData.id, 'SUPERVISOR');
   const router = useRouter();
-  const [agents, setAgents] = useState(supervisorData.agents);
+  // Use SWR for agents
+  const { data, mutate } = useSWR('/api/agents', fetcher, { fallbackData: { agents: supervisorData.agents } });
+  const [agents, setAgents] = useState(data?.agents || supervisorData.agents);
   const [totalAgents, setTotalAgents] = useState(0);
   const [activeAgents, setActiveAgents] = useState(0);
+
+  // Keep agents in sync with SWR
+  useEffect(() => {
+    if (data?.agents) setAgents(data.agents);
+  }, [data]);
 
   // Fetch total and active agents count
   useEffect(() => {
@@ -54,19 +64,13 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
         console.error('Failed to fetch agent counts:', error);
       }
     };
-
     fetchAgentCounts();
   }, []);
 
   useEffect(() => {
-    setAgents(supervisorData.agents);
-  }, [supervisorData.agents]);
-
-  useEffect(() => {
     if (!socket) return;
-
     // Handle agent status updates
-    const handleAgentStatusUpdate = async (data: {
+    const handleAgentStatusUpdate = (data: {
       agentId: string;
       status: string;
       description?: string;
@@ -75,7 +79,6 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
       agentName?: string;
       pauseReason?: string;
     }) => {
-      // Update local agents list
       setAgents(prevAgents => {
         const updatedAgents = prevAgents.map(agent =>
           agent.id === data.agentId
@@ -90,77 +93,20 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
               }
             : agent
         );
-        // Show toast with the updated agent info
-        const agent = updatedAgents.find(a => a.id === data.agentId);
-        if (agent) {
-          toast.info(
-            `${agent.name} status changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}`,
-            {
-              description: data.description,
-              duration: 5000
-            }
-          );
-        }
         return updatedAgents;
       });
-
-      // Update active agents count
+      mutate(); // Revalidate SWR cache
       if (data.status === 'ONLINE') {
         setActiveAgents(prev => prev + 1);
       } else if (data.status === 'OFFLINE' || data.status === 'PAUSED') {
         setActiveAgents(prev => Math.max(0, prev - 1));
       }
-
-      // Broadcast status update
-      console.log('[Server] Emitting agent-status-update:', {
-        agentId: data.agentId,
-        status: data.status,
-        pauseReason: data.pauseReason,
-        agentName: data.agentName || data.agentId,
-      });
-      socket.emit('agent-status-update', {
-        agentId: data.agentId,
-        status: data.status,
-        pauseReason: data.pauseReason,
-        agentName: data.agentName || data.agentId,
-      });
     };
-
-    // Handle performance updates
-    const handlePerformanceUpdate = (data: {
-      agentId: string;
-      metrics: {
-        callsHandled: number;
-        avgCallTime: number;
-        satisfaction: number;
-        resolution: number;
-      };
-      timestamp: Date;
-    }) => {
-      const agent = agents.find(a => a.id === data.agentId);
-      if (agent) {
-        toast.success(
-          `${agent.name}'s performance updated`,
-          {
-            description: `${data.metrics.callsHandled} calls handled, ${data.metrics.avgCallTime}s avg time`,
-            duration: 5000
-          }
-        );
-      }
-    };
-
-    // Join supervisor room for notifications
-    socket.emit('join-room', 'supervisors');
-
-    // Listen for events
     socket.on('agent-status-update', handleAgentStatusUpdate);
-    socket.on('agent-performance-update', handlePerformanceUpdate);
-
     return () => {
       socket.off('agent-status-update', handleAgentStatusUpdate);
-      socket.off('agent-performance-update', handlePerformanceUpdate);
     };
-  }, [socket,agents]);
+  }, [socket, mutate]);
 
   const totalCalls = agents.reduce((acc, agent) => acc + agent.calls.length, 0);
   const averageHandleTime = "5m 30s"; // This should be calculated from actual data

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { toast } from 'sonner';
 import { User, Bell, Search, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import useSWR from 'swr';
 
 interface TopbarProps {
   user: {
@@ -82,6 +83,8 @@ const getStatusBgColor = (status: UserStatus) => {
   }
 };
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 export default function Topbar({ user }: TopbarProps) {
   const router = useRouter();
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -91,6 +94,12 @@ export default function Topbar({ user }: TopbarProps) {
   const notificationsRef = useRef<Notification[]>([]);
 
   const { socket, isConnected, emitStatusChange } = useSocket(user.id, user.role);
+
+  // Use SWR for notifications
+  const { data: swrData, mutate: mutateNotifications } = useSWR('/api/notifications', fetcher);
+  useEffect(() => {
+    if (swrData?.notifications) setNotifications(swrData.notifications);
+  }, [swrData]);
 
   useEffect(() => {
     notificationsRef.current = notifications;
@@ -106,7 +115,10 @@ export default function Topbar({ user }: TopbarProps) {
     if (!socket) return;
 
     // --- Common notification handlers ---
-    const pushNotification = (notif: Notification) => setNotifications((prev) => [notif, ...prev]);
+    const pushNotification = (notif: Notification) => {
+      setNotifications((prev) => [notif, ...prev]);
+      mutateNotifications();
+    };
 
     // SUPERVISOR EVENTS
     if (user.role === 'SUPERVISOR') {
@@ -184,22 +196,7 @@ export default function Topbar({ user }: TopbarProps) {
         socket.off('system-notification', handleSystemNotification);
       };
     }
-  }, [socket, user.role]);
-
-  // Fetch initial notifications
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await fetch('/api/notifications');
-        const data = await response.json();
-        setNotifications(data.notifications);
-      } catch (error) {
-        console.error('Failed to fetch notifications:', error);
-      }
-    };
-
-    fetchNotifications();
-  }, []);
+  }, [socket, user.role, mutateNotifications]);
 
   // Mark all notifications as read when dropdown is opened
   useEffect(() => {
