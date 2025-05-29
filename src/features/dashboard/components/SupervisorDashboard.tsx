@@ -38,28 +38,92 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
   const [activeTab, setActiveTab] = useState('overview');
   const { socket } = useSocket(supervisorData.id, 'SUPERVISOR');
   const router = useRouter();
+  const [agents, setAgents] = useState(supervisorData.agents);
+  const [totalAgents, setTotalAgents] = useState(0);
+  const [activeAgents, setActiveAgents] = useState(0);
+
+  // Fetch total and active agents count
+  useEffect(() => {
+    const fetchAgentCounts = async () => {
+      try {
+        const response = await fetch('/api/agents/counts');
+        const data = await response.json();
+        setTotalAgents(data.totalAgents);
+        setActiveAgents(data.activeAgents);
+      } catch (error) {
+        console.error('Failed to fetch agent counts:', error);
+      }
+    };
+
+    fetchAgentCounts();
+  }, []);
+
+  useEffect(() => {
+    setAgents(supervisorData.agents);
+  }, [supervisorData.agents]);
 
   useEffect(() => {
     if (!socket) return;
 
     // Handle agent status updates
-    const handleAgentStatusUpdate = (data: { 
-      agentId: string; 
-      status: string; 
+    const handleAgentStatusUpdate = async (data: {
+      agentId: string;
+      status: string;
       description?: string;
       changedBy?: string;
       timestamp: Date;
+      agentName?: string;
+      pauseReason?: string;
     }) => {
-      const agent = supervisorData.agents.find(a => a.id === data.agentId);
-      if (agent) {
-        toast.info(
-          `${agent.name} status changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}`,
-          {
-            description: data.description,
-            duration: 5000
-          }
+      // Update local agents list
+      setAgents(prevAgents => {
+        const updatedAgents = prevAgents.map(agent =>
+          agent.id === data.agentId
+            ? {
+                ...agent,
+                statusInfo: {
+                  ...agent.statusInfo,
+                  status: data.status,
+                  lastActive: data.timestamp ? new Date(data.timestamp) : new Date(),
+                  pauseReason: data.pauseReason || undefined,
+                },
+              }
+            : agent
         );
+        // Show toast with the updated agent info
+        const agent = updatedAgents.find(a => a.id === data.agentId);
+        if (agent) {
+          toast.info(
+            `${agent.name} status changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}`,
+            {
+              description: data.description,
+              duration: 5000
+            }
+          );
+        }
+        return updatedAgents;
+      });
+
+      // Update active agents count
+      if (data.status === 'ONLINE') {
+        setActiveAgents(prev => prev + 1);
+      } else if (data.status === 'OFFLINE' || data.status === 'PAUSED') {
+        setActiveAgents(prev => Math.max(0, prev - 1));
       }
+
+      // Broadcast status update
+      console.log('[Server] Emitting agent-status-update:', {
+        agentId: data.agentId,
+        status: data.status,
+        pauseReason: data.pauseReason,
+        agentName: data.agentName || data.agentId,
+      });
+      socket.emit('agent-status-update', {
+        agentId: data.agentId,
+        status: data.status,
+        pauseReason: data.pauseReason,
+        agentName: data.agentName || data.agentId,
+      });
     };
 
     // Handle performance updates
@@ -73,7 +137,7 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
       };
       timestamp: Date;
     }) => {
-      const agent = supervisorData.agents.find(a => a.id === data.agentId);
+      const agent = agents.find(a => a.id === data.agentId);
       if (agent) {
         toast.success(
           `${agent.name}'s performance updated`,
@@ -96,10 +160,9 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
       socket.off('agent-status-update', handleAgentStatusUpdate);
       socket.off('agent-performance-update', handlePerformanceUpdate);
     };
-  }, [socket, supervisorData.agents]);
+  }, [socket,agents]);
 
-  const totalCalls = supervisorData.agents.reduce((acc, agent) => acc + agent.calls.length, 0);
-  const activeAgents = supervisorData.agents.filter(agent => agent.statusInfo?.status === 'ONLINE').length;
+  const totalCalls = agents.reduce((acc, agent) => acc + agent.calls.length, 0);
   const averageHandleTime = "5m 30s"; // This should be calculated from actual data
   const queueSize = 12; // This should be fetched from the queue system
 
@@ -115,7 +178,7 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
           <CardContent>
             <div className="text-2xl font-extrabold text-blue-900">{activeAgents}</div>
             <p className="text-xs text-blue-700">
-              of {supervisorData.agents.length} total agents
+              of {totalAgents} total agents
             </p>
           </CardContent>
         </Card>
@@ -180,7 +243,7 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
               <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Live Call Monitoring</CardTitle>
             </CardHeader>
             <CardContent className="w-full pt-0">
-              <LiveMonitoring agents={supervisorData.agents} />
+              <LiveMonitoring agents={agents} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -191,7 +254,7 @@ export default function SupervisorDashboard({ supervisorData }: SupervisorDashbo
               <CardTitle className="text-2xl font-extrabold text-blue-900 mb-2">Team Management</CardTitle>
             </CardHeader>
             <CardContent className="w-full pt-0">
-              <TeamOverview agents={supervisorData.agents} detailed />
+              <TeamOverview agents={agents} detailed />
             </CardContent>
           </Card>
         </TabsContent>

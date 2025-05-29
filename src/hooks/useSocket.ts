@@ -7,21 +7,21 @@ export function useSocket(userId: string | null | undefined, role: UserRole) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Only attempt to connect if a valid userId is provided
-    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
-      console.warn('useSocket: Invalid userId provided, not connecting.', userId);
+    // Only attempt to connect if a valid userId and role are provided
+    if (!userId || typeof userId !== 'string' || userId.trim() === '' || !role) {
+      console.warn('useSocket: Invalid userId or role provided, not connecting.', userId, role);
       if (socketRef.current?.connected) {
         socketRef.current.disconnect();
       }
       return;
     }
 
-    // Initialize socket connection
+    // Initialize socket connection with auth
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000', {
-      query: {
-        userId,
-        role
-      }
+      auth: {
+        agentId: userId,
+        role: role,
+      },
     });
 
     socketRef.current = socket;

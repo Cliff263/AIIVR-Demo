@@ -21,6 +21,31 @@ interface TopbarProps {
   };
 }
 
+interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: Date;
+  read: boolean;
+}
+
+interface AgentStatusUpdate {
+  agentId: string;
+  status: string;
+  description?: string;
+  changedBy?: string;
+  timestamp: Date;
+  agentName?: string;
+  name?: string;
+  pauseReason?: string;
+}
+
+interface SystemNotification {
+  title?: string;
+  message: string;
+  timestamp?: Date;
+}
+
 const getStatusColor = (status: UserStatus) => {
   switch (status) {
     case 'ONLINE':
@@ -62,8 +87,8 @@ export default function Topbar({ user }: TopbarProps) {
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [status, setStatus] = useState<UserStatus>(user.status?.status || 'OFFLINE');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const notificationsRef = useRef<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notificationsRef = useRef<Notification[]>([]);
 
   const { socket, isConnected, emitStatusChange } = useSocket(user.id, user.role);
 
@@ -81,24 +106,14 @@ export default function Topbar({ user }: TopbarProps) {
     if (!socket) return;
 
     // --- Common notification handlers ---
-    const pushNotification = (notif) => setNotifications((prev) => [notif, ...prev]);
+    const pushNotification = (notif: Notification) => setNotifications((prev) => [notif, ...prev]);
 
     // SUPERVISOR EVENTS
     if (user.role === 'SUPERVISOR') {
-      // Incoming call
-      const handleCallCreated = (call) => {
-        pushNotification({
-          id: 'call-' + call.id,
-          title: 'Incoming Call',
-          description: `Call from ${call.phoneNumber || 'Unknown'} (Agent: ${call.agent?.name || 'N/A'})`,
-          createdAt: call.timestamp || new Date().toISOString(),
-          read: false,
-        });
-      };
       // Agent status change
-      const handleAgentStatusUpdate = (data) => {
-        // Try to get agent name from the event, fallback to agentId
-        const agentName = data.agentName || data.name || data.agent_id || data.agentId || 'Unknown Agent';
+      const handleAgentStatusUpdate = (data: AgentStatusUpdate) => {
+        console.log('[Topbar] Received agent-status-update:', data);
+        const agentName = data.agentName || data.name || data.agentId || 'Unknown Agent';
         let message = '';
         switch (data.status) {
           case 'LOGIN':
@@ -111,7 +126,7 @@ export default function Topbar({ user }: TopbarProps) {
             message = `Agent ${agentName} is now ONLINE`;
             break;
           case 'PAUSED':
-            message = `Agent ${agentName} is now PAUSED${data.pauseReason ? ` (reason: ${data.pauseReason})` : ''}`;
+            message = `Agent ${agentName} is PAUSED${data.pauseReason ? `: ${data.pauseReason}` : ''}`;
             break;
           case 'OFFLINE':
             message = `Agent ${agentName} is now OFFLINE`;
@@ -119,85 +134,79 @@ export default function Topbar({ user }: TopbarProps) {
           default:
             message = `Agent ${agentName} status changed to ${data.status}`;
         }
+
         pushNotification({
-          id: 'agent-status-' + data.agentId + '-' + data.status + '-' + (data.timestamp || Date.now()),
+          id: `status-${data.agentId}-${data.status}-${Date.now()}`,
           title: 'Agent Status Change',
           description: message,
-          createdAt: data.timestamp || new Date().toISOString(),
-          read: false,
+          timestamp: data.timestamp || new Date(),
+          read: false
         });
       };
-      // Query completion/assignment
-      const handleQueryStatusUpdate = (data) => {
+
+      // System notifications
+      const handleSystemNotification = (data: SystemNotification) => {
         pushNotification({
-          id: 'query-status-' + data.queryId + '-' + data.status,
-          title: 'Query Update',
-          description: `Query #${data.queryId} status: ${data.status}${data.agentId ? ` (Agent: ${data.agentId})` : ''}`,
-          createdAt: data.timestamp || new Date().toISOString(),
-          read: false,
+          id: `system-${Date.now()}-${Math.random()}`,
+          title: data.title || 'System Notification',
+          description: data.message,
+          timestamp: data.timestamp || new Date(),
+          read: false
         });
       };
-      socket.on('call-created', handleCallCreated);
+
+      // Listen for events
       socket.on('agent-status-update', handleAgentStatusUpdate);
-      socket.on('query-status-update', handleQueryStatusUpdate);
-      // Clean up
+      socket.on('system-notification', handleSystemNotification);
+
       return () => {
-        socket.off('call-created', handleCallCreated);
         socket.off('agent-status-update', handleAgentStatusUpdate);
-        socket.off('query-status-update', handleQueryStatusUpdate);
+        socket.off('system-notification', handleSystemNotification);
       };
     }
 
     // AGENT EVENTS
     if (user.role === 'AGENT') {
-      // Forced status change by supervisor
-      const handleStatusUpdate = (data) => {
+      // System notifications
+      const handleSystemNotification = (data: SystemNotification) => {
         pushNotification({
-          id: 'forced-status-' + data.status + '-' + (data.timestamp || Date.now()),
-          title: 'Status Changed by Supervisor',
-          description: `Your status was changed to ${data.status}${data.changedBy ? ` by ${data.changedBy}` : ''}${data.description ? `: ${data.description}` : ''}`,
-          createdAt: data.timestamp || new Date().toISOString(),
-          read: false,
+          id: `system-${Date.now()}-${Math.random()}`,
+          title: data.title || 'System Notification',
+          description: data.message,
+          timestamp: data.timestamp || new Date(),
+          read: false
         });
       };
-      // Supervisor intervention
-      const handleSupervisorIntervention = (data) => {
-        pushNotification({
-          id: 'supervisor-intervention-' + (data.timestamp || Date.now()),
-          title: 'Supervisor Intervention',
-          description: data.description,
-          createdAt: data.timestamp || new Date().toISOString(),
-          read: false,
-        });
-      };
-      // New assigned query or query update
-      const handleQueryStatusUpdate = (data) => {
-        pushNotification({
-          id: 'query-status-' + data.queryId + '-' + data.status,
-          title: 'Query Update',
-          description: `Query #${data.queryId} status: ${data.status}`,
-          createdAt: data.timestamp || new Date().toISOString(),
-          read: false,
-        });
-      };
-      socket.on('status-update', handleStatusUpdate);
-      socket.on('supervisor-intervention', handleSupervisorIntervention);
-      socket.on('query-status-update', handleQueryStatusUpdate);
-      // Clean up
+
+      socket.on('system-notification', handleSystemNotification);
+
       return () => {
-        socket.off('status-update', handleStatusUpdate);
-        socket.off('supervisor-intervention', handleSupervisorIntervention);
-        socket.off('query-status-update', handleQueryStatusUpdate);
+        socket.off('system-notification', handleSystemNotification);
       };
     }
   }, [socket, user.role]);
 
+  // Fetch initial notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch('/api/notifications');
+        const data = await response.json();
+        setNotifications(data.notifications);
+      } catch (error) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
   // Mark all notifications as read when dropdown is opened
   useEffect(() => {
-    if (isNotificationsOpen && notifications.some(n => !n.read)) {
+    if (isNotificationsOpen && notifications?.some(n => !n.read)) {
       setNotifications((prev) => prev.map(n => ({ ...n, read: true })));
     }
-  }, [isNotificationsOpen]);
+  }, [isNotificationsOpen, notifications]);
 
   const updateStatus = (newStatus: UserStatus) => {
     if (isConnected) {
@@ -285,29 +294,42 @@ export default function Topbar({ user }: TopbarProps) {
               aria-label="View notifications"
             >
               <Bell className="w-5 h-5" />
-              {notifications.some(n => !n.read) && (
+              {notifications?.some(n => !n.read) && (
                 <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
               )}
             </button>
             {isNotificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-                <div className="p-4">
-                  <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
-                  <div className="mt-2 text-sm text-gray-700 max-h-64 overflow-y-auto">
-                    {notifications.length === 0 ? (
-                      <div className="text-gray-500">No new notifications</div>
-                    ) : (
-                      <ul className="divide-y divide-blue-50">
-                        {notifications.slice(0, 10).map((n) => (
-                          <li key={n.id} className="py-2">
+              <div className="absolute right-0 mt-2 w-96 rounded-xl shadow-2xl bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20 animate-fade-in">
+                <div className="p-4 border-b flex items-center justify-between">
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <Bell className="w-5 h-5 text-blue-500" /> Notifications
+                  </h3>
+                  <button
+                    className="text-xs text-blue-600 hover:underline font-semibold"
+                    onClick={() => setNotifications((prev) => prev?.map(n => ({ ...n, read: true })) || [])}
+                  >
+                    Mark all as read
+                  </button>
+                </div>
+                <div className="text-sm text-gray-700 max-h-80 overflow-y-auto divide-y divide-blue-50">
+                  {notifications?.length === 0 ? (
+                    <div className="text-gray-500 p-6 text-center">No new notifications</div>
+                  ) : (
+                    <ul>
+                      {notifications?.slice(0, 10).map((n) => (
+                        <li key={n.id} className={`flex items-start gap-3 px-4 py-3 ${!n.read ? 'bg-blue-50' : ''}`}>
+                          <div className="pt-1">
+                            <Bell className="w-5 h-5 text-blue-400" />
+                          </div>
+                          <div className="flex-1">
                             <div className="font-semibold text-blue-900">{n.title}</div>
-                            <div className="text-xs text-blue-500">{new Date(n.createdAt).toLocaleString()}</div>
+                            <div className="text-xs text-blue-500 mb-1">{new Date(n.timestamp).toLocaleString()}</div>
                             <div className="text-sm text-gray-700">{n.description}</div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             )}

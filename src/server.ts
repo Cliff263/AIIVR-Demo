@@ -79,6 +79,12 @@ app.prepare().then(() => {
       // Handle status changes
       socket.on('status-change', async (data: { status: AgentStatus; pauseReason?: PauseReason }) => {
         try {
+          // Fetch previous status before updating
+          const prevStatusInfo = await prisma.agentStatusInfo.findUnique({
+            where: { userId: agentId },
+            select: { status: true }
+          });
+
           // Update agent status in database
           const [user, statusInfo] = await prisma.$transaction([
             prisma.user.update({
@@ -107,6 +113,9 @@ app.prepare().then(() => {
             }),
           ]);
 
+          // Fetch agent name
+          const agent = await prisma.user.findUnique({ where: { id: agentId }, select: { name: true } });
+
           // Log the status change
           await prisma.userActivityLog.create({
             data: {
@@ -117,11 +126,35 @@ app.prepare().then(() => {
           });
 
           // Broadcast status update
+          console.log('[Server] Emitting agent-status-update:', {
+            agentId,
+            status: data.status,
+            pauseReason: data.pauseReason,
+            agentName: agent?.name || agentId,
+          });
           io.emit('agent-status-update', {
             agentId,
             status: data.status,
             pauseReason: data.pauseReason,
+            agentName: agent?.name || agentId,
           });
+
+          // Log to Notification table: login vs. status change
+          if (data.status === 'ONLINE' && prevStatusInfo?.status === 'OFFLINE') {
+            await prisma.notification.create({
+              data: {
+                title: 'Agent Login',
+                message: `Agent ${agent?.name || agentId} logged in`,
+              }
+            });
+          } else {
+            await prisma.notification.create({
+              data: {
+                title: 'Agent Status Change',
+                message: `Agent ${agent?.name || agentId} is now ${data.status}${data.pauseReason ? ` (${data.pauseReason})` : ''}`,
+              }
+            });
+          }
         } catch (error) {
           console.error('Error handling status change:', error);
           socket.emit('error', { message: 'Failed to update status' });
@@ -198,12 +231,15 @@ app.prepare().then(() => {
 
           // If it's a status change, emit to specific channels
           if (data.type.startsWith('STATUS_CHANGE')) {
+            // Fetch agent name
+            const agent = await prisma.user.findUnique({ where: { id: agentId }, select: { name: true } });
             // Emit to supervisors for monitoring
             io.to('supervisors').emit('agent-status-update', {
               agentId,
               status: data.type,
               description: data.description,
-              timestamp: new Date()
+              timestamp: new Date(),
+              agentName: agent?.name || agentId,
             });
 
             // Emit to the specific agent
@@ -236,7 +272,7 @@ app.prepare().then(() => {
 
           const agent = await prisma.user.findUnique({
             where: { id: data.agentId },
-            include: { statusInfo: true }
+            select: { name: true },
           });
 
           if (!agent) {
@@ -276,12 +312,20 @@ app.prepare().then(() => {
             agentId: data.agentId,
             status: data.newStatus,
             changedBy: user.name,
-            timestamp: new Date()
+            timestamp: new Date(),
+            agentName: agent?.name || data.agentId,
           });
           socket.to(`agent-${data.agentId}`).emit('status-update', {
             status: data.newStatus,
             changedBy: user.name,
             timestamp: new Date()
+          });
+          // Log to Notification table
+          await prisma.notification.create({
+            data: {
+              title: 'Agent Status Change by Supervisor',
+              message: `Agent ${agent?.name || data.agentId} status changed to ${data.newStatus} by supervisor ${user.name}${data.reason ? `: ${data.reason}` : ''}`,
+            }
           });
         } catch (error) {
           console.error('Error handling supervisor status change:', error);
@@ -334,6 +378,14 @@ app.prepare().then(() => {
             metrics: data.metrics,
             timestamp: new Date()
           });
+          // Log to Notification table
+          const agent = await prisma.user.findUnique({ where: { id: data.agentId }, select: { name: true } });
+          await prisma.notification.create({
+            data: {
+              title: 'Agent Performance Update',
+              message: `Agent ${agent?.name || data.agentId} performance updated: ${data.metrics.callsHandled} calls handled, ${data.metrics.avgCallTime}s avg time`,
+            }
+          });
         } catch (error) {
           console.error('Error handling performance update:', error);
           socket.emit('error', { message: 'Failed to update performance metrics' });
@@ -352,9 +404,24 @@ app.prepare().then(() => {
               data: { status: 'OFFLINE' }
             });
 
+            // Fetch agent name
+            const agent = await prisma.user.findUnique({ where: { id: agentId }, select: { name: true } });
+            console.log('[Server] Emitting agent-status-update (disconnect):', {
+              agentId,
+              status: 'OFFLINE',
+              agentName: agent?.name || agentId,
+            });
             io.emit('agent-status-update', {
               agentId,
-              status: 'OFFLINE'
+              status: 'OFFLINE',
+              agentName: agent?.name || agentId,
+            });
+            // Log to Notification table
+            await prisma.notification.create({
+              data: {
+                title: 'Agent Status Change',
+                message: `Agent ${agent?.name || agentId} is now OFFLINE`,
+              }
             });
           }
         } catch (error) {
