@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,33 +12,46 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Icons } from "@/components/ui/icons";
-import { AgentStatus } from "@prisma/client";
+import { AgentStatus, PauseReason } from "@prisma/client";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import type { Socket } from "socket.io-client";
 
 interface AgentStatusToggleProps {
   status: AgentStatus;
   setStatus: (status: AgentStatus) => void;
-  socket: any;
+  socket?: Socket | null;
 }
 
 export default function AgentStatusToggle({ status, setStatus, socket }: AgentStatusToggleProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [pauseReason, setPauseReason] = useState("");
+  const [pauseReason, setPauseReason] = useState<PauseReason | "">("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<AgentStatus | null>(null);
 
-  const pauseOptions = [
-    "Lunch",
-    "Bathroom",
-    "Smoke",
-    "On Leave",
-    "Case Work",
-  ];
+  const pauseOptions = useMemo(
+    () => [
+      { value: PauseReason.LUNCH, label: "Lunch" },
+      { value: PauseReason.BATHROOM, label: "Bathroom" },
+      { value: PauseReason.SMOKE, label: "Smoke" },
+      { value: PauseReason.ON_LEAVE, label: "On Leave" },
+      { value: PauseReason.CASE_WORK, label: "Case Work" },
+      { value: PauseReason.TRAINING, label: "Training" },
+      { value: PauseReason.MEETING, label: "Meeting" },
+      { value: PauseReason.SYSTEM_ISSUE, label: "System Issue" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      setPendingStatus(status);
+      setPauseReason("");
+    }
+  }, [isOpen, status]);
 
   const handleStatusChange = async () => {
-    if (!socket || !pendingStatus) return;
+    if (!pendingStatus) return;
     setIsLoading(true);
     try {
       const response = await fetch("/api/agent/status", {
@@ -54,11 +67,16 @@ export default function AgentStatusToggle({ status, setStatus, socket }: AgentSt
       if (!response.ok) {
         throw new Error("Failed to update status");
       }
-      socket.emit("status-change", {
-        status: pendingStatus,
-        pauseReason: pendingStatus === "PAUSED" ? pauseReason : undefined,
-      });
-      setStatus(pendingStatus);
+      const { status: updatedStatus } = await response.json();
+
+      if (socket) {
+        socket.emit("status-change", {
+          status: pendingStatus,
+          pauseReason: pendingStatus === "PAUSED" ? pauseReason : undefined,
+        });
+      }
+
+      setStatus(updatedStatus || pendingStatus);
       setIsOpen(false);
       setPauseReason("");
       setPendingStatus(null);
@@ -71,7 +89,7 @@ export default function AgentStatusToggle({ status, setStatus, socket }: AgentSt
 
   return (
     <div className="flex justify-end w-full">
-      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); setPendingStatus(null); setPauseReason(""); }}>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           <Button
             variant="outline"
@@ -119,13 +137,13 @@ export default function AgentStatusToggle({ status, setStatus, socket }: AgentSt
             {pendingStatus === "PAUSED" && (
               <div className="grid gap-2">
                 <Label htmlFor="pause-reason">Pause Reason</Label>
-                <Select value={pauseReason} onValueChange={setPauseReason}>
+                <Select value={pauseReason || undefined} onValueChange={(value) => setPauseReason(value as PauseReason)}>
                   <SelectTrigger id="pause-reason" className="w-full">
                     <SelectValue placeholder="Select a reason" />
                   </SelectTrigger>
                   <SelectContent>
                     {pauseOptions.map((option) => (
-                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

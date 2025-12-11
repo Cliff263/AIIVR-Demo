@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentSession } from '@/actions/auth';
+import { AgentStatus, PauseReason, UserStatus } from '@prisma/client';
 
 export async function POST(request: Request) {
   try {
@@ -10,38 +11,57 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { status, pauseReason } = body;
+    const { status, pauseReason } = body as { status?: AgentStatus; pauseReason?: PauseReason };
 
-    if (!status || !['ONLINE', 'PAUSED', 'OFFLINE'].includes(status)) {
+    if (!status || !Object.values(AgentStatus).includes(status)) {
       return new NextResponse('Invalid status', { status: 400 });
     }
 
-    // Update agent status in database
+    const parsedPauseReason = status === AgentStatus.PAUSED ? pauseReason : null;
+    if (status === AgentStatus.PAUSED && parsedPauseReason && !Object.values(PauseReason).includes(parsedPauseReason)) {
+      return new NextResponse('Invalid pause reason', { status: 400 });
+    }
+
+    const userStatus: UserStatus =
+      status === AgentStatus.ONLINE
+        ? UserStatus.ONLINE
+        : status === AgentStatus.PAUSED
+          ? UserStatus.PAUSED
+          : UserStatus.OFFLINE;
+
     const updatedAgent = await prisma.user.update({
       where: { id: user.id },
       data: {
-        status: {
+        status: userStatus,
+        statusInfo: {
           upsert: {
             create: {
               status,
-              pauseReason,
+              pauseReason: parsedPauseReason,
             },
             update: {
               status,
-              pauseReason,
+              pauseReason: parsedPauseReason,
+              lastActive: new Date(),
             },
+          },
+        },
+        statusHistory: {
+          create: {
+            status,
+            pauseReason: parsedPauseReason,
           },
         },
       },
       include: {
-        status: true,
+        statusInfo: true,
       },
     });
 
     return NextResponse.json({
-      status: updatedAgent.status?.status,
-      pauseReason: updatedAgent.status?.pauseReason,
-      lastUpdated: updatedAgent.status?.updatedAt,
+      status: updatedAgent.statusInfo?.status,
+      pauseReason: updatedAgent.statusInfo?.pauseReason,
+      lastUpdated: updatedAgent.statusInfo?.updatedAt,
     });
   } catch (error) {
     console.error('Error updating agent status:', error);

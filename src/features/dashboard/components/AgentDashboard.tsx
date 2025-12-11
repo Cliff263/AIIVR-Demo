@@ -8,7 +8,7 @@ import AgentStatusToggle from '@/features/agent/AgentStatusToggle';
 import { CallLogs } from '@/features/calls/components/CallLogs';
 import { PerformanceMetrics } from '@/features/metrics/components/PerformanceMetrics';
 import { AssignedQueries } from '@/features/queries/components/AssignedQueries';
-import { UserStatus } from "@prisma/client";
+import { AgentStatus } from "@prisma/client";
 
 interface Call {
   id: string;
@@ -24,7 +24,7 @@ interface AgentDashboardProps {
     name: string;
     calls: Call[];
     statusInfo: {
-      status: UserStatus;
+      status: AgentStatus;
       lastActive: Date;
     } | null;
   };
@@ -32,6 +32,7 @@ interface AgentDashboardProps {
 
 export default function AgentDashboard({ agentData }: AgentDashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [status, setStatus] = useState<AgentStatus>(agentData.statusInfo?.status || 'OFFLINE');
 
   return (
     <div className="space-y-6">
@@ -43,12 +44,9 @@ export default function AgentDashboard({ agentData }: AgentDashboardProps) {
             <UserCheck className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <AgentStatusToggle 
-              status={agentData.statusInfo?.status || 'OFFLINE'} 
-              setStatus={(status) => {
-                // Handle status update
-                console.log('Status updated:', status);
-              }}
+            <AgentStatusToggle
+              status={status}
+              setStatus={setStatus}
               socket={null} // You'll need to pass the actual socket instance here
             />
           </CardContent>
